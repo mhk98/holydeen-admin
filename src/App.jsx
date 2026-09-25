@@ -1955,6 +1955,7 @@ function App() {
         return (
           <LandingPageViewPage
             campaign={selectedCampaign}
+            trackingEnabled={false}
             onBack={() => {
               setSelectedCampaign(null);
               setActiveLandingPage("landing_manage");

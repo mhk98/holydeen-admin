@@ -24,10 +24,10 @@ body {
   width: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #071B52;
+  background: #1C2744;
 }
 ::-webkit-scrollbar-thumb {
-  background: #C79524;
+  background: #C39A28;
   border-radius: 2px;
 }
 

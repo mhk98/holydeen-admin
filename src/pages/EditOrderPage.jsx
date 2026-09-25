@@ -27,7 +27,7 @@ import { imageUrl } from "../utils/assetUrl";
 
 const deliveryAreas = [
   { label: "ঢাকার ভিতরে ৮০ টাকা", fee: 80 },
-  { label: "ঢাকার বাইরে ১২০ টাকা", fee: 120 },
+  { label: "ঢাকার বাইরে ১৩০ টাকা", fee: 130, legacyLabels: ["ঢাকার বাইরে ১২০ টাকা"] },
   { label: "চট্টগ্রাম ১৫০ টাকা", fee: 150 },
   { label: "সিলেট ১৫০ টাকা", fee: 150 },
   { label: "রাজশাহী ১৩০ টাকা", fee: 130 },
@@ -134,10 +134,20 @@ export default function EditOrderPage({
 
   const [phone, setPhone] = useState(order.customerPhone || "");
   const [customerName, setCustomerName] = useState(order.customerName || "");
-  const [address, setAddress] = useState(
-    [order.customerArea, order.customerDistrict].filter(Boolean).join(", "),
+  // Older manual orders saved the delivery-area label (e.g. "ঢাকার বাইরে ১২০ টাকা")
+  // as customerArea — treat that as the area selection, not the address.
+  const savedAreaText = String(order.customerArea || "").trim();
+  const savedAreaIdx = deliveryAreas.findIndex(
+    (area) =>
+      area.label === savedAreaText ||
+      (area.legacyLabels || []).includes(savedAreaText),
   );
-  const [areaIdx, setAreaIdx] = useState(0);
+  const [address, setAddress] = useState(
+    [savedAreaIdx >= 0 ? "" : order.customerArea, order.customerDistrict]
+      .filter(Boolean)
+      .join(", "),
+  );
+  const [areaIdx, setAreaIdx] = useState(Math.max(0, savedAreaIdx));
   const [discount, setDiscount] = useState("");
   const [advanced, setAdvanced] = useState(String(order.advance || 0));
   const [orderStatus, setOrderStatus] = useState(order.status || "pending");
@@ -273,6 +283,10 @@ export default function EditOrderPage({
 
   async function handleUpdate() {
     if (cart.length === 0) return;
+    if (!isGuest && !address.trim()) {
+      alert("Customer এর পুরো ঠিকানা দিন");
+      return;
+    }
     setSubmitting(true);
     try {
       const productName = cart.map((i) => `${i.name} x${i.qty}`).join(", ");
@@ -281,7 +295,7 @@ export default function EditOrderPage({
       const payload = {
         customerName: isGuest ? "Guest" : customerName.trim() || "Guest",
         customerPhone: isGuest ? "Guest" : phone.trim(),
-        customerArea: address || deliveryAreas[areaIdx].label,
+        customerArea: address.trim() || null,
         productName,
         productImage,
         quantity,

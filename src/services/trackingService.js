@@ -1,6 +1,12 @@
 import { apiRequest } from "../utils/apiClient";
 
 let initializationPromise = null;
+// Dashboard previews must not send real events to the live pixels / Conversions API.
+let trackingSuspended = false;
+
+export function setTrackingSuspended(value) {
+  trackingSuspended = Boolean(value);
+}
 let trackingConfig = { metaPixels: [], tiktokPixels: [], googleAds: [] };
 
 const META_EVENT_NAMES = {
@@ -254,14 +260,17 @@ export function getTrackingClickData() {
 
 export async function trackMarketingEvent(
   eventName,
-  { userData = {}, customData = {} } = {},
+  { userData = {}, customData = {}, eventId: suppliedEventId, server = true, enabled = true } = {},
 ) {
+  if (!enabled || trackingSuspended) return null;
   try {
     await initializeTracking();
-    const eventId = createEventId(eventName);
+    if (!enabled || trackingSuspended) return null;
+    const eventId = suppliedEventId || createEventId(eventName);
     trackInBrowser(eventName, eventId, customData);
+    if (!server) return eventId;
     const clickData = getClickData();
-    await apiRequest("/tracking/events", {
+    const response = await apiRequest("/tracking/events", {
       method: "POST",
       body: JSON.stringify({
         eventName,
@@ -272,7 +281,9 @@ export async function trackMarketingEvent(
         customData,
       }),
     });
-    return eventId;
+    const failures = response?.data?.results?.filter((item) => !item.ok && !item.skipped) || [];
+    if (failures.length) console.warn('Marketing delivery failed', failures.map(({ platform, status }) => ({ platform, status })));
+    return failures.length ? null : eventId;
   } catch (error) {
     console.warn(`Marketing event "${eventName}" failed`, error);
     return null;

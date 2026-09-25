@@ -17,6 +17,7 @@ import { landingPageService } from "../../services/landingPageService";
 import { orderService } from "../../services/orderService";
 import {
   getTrackingClickData,
+  setTrackingSuspended,
   trackMarketingEvent,
 } from "../../services/trackingService";
 import {
@@ -141,7 +142,13 @@ function getVideoEmbedUrl(value) {
   return raw;
 }
 
-export default function LandingPageViewPage({ campaign }) {
+export default function LandingPageViewPage({ campaign, trackingEnabled = true }) {
+  // Declared first so it runs before the PageView/ViewContent effect below.
+  useEffect(() => {
+    setTrackingSuspended(!trackingEnabled);
+    return () => setTrackingSuspended(false);
+  }, [trackingEnabled]);
+
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -161,6 +168,8 @@ export default function LandingPageViewPage({ campaign }) {
   const incompleteOrderIdRef = useRef(null);
   const incompletePhoneRef = useRef("");
   const leadTrackedOrderIdRef = useRef(null);
+  const viewedCampaignRef = useRef(null);
+  const checkoutCampaignRef = useRef(null);
 
   const productName = getProductName(campaign);
   const title =
@@ -170,7 +179,14 @@ export default function LandingPageViewPage({ campaign }) {
   const regularPage = isRegularLandingPage(campaign);
   const price = toNumber(campaign?.price, regularPage ? 4100 : 699);
   const originalPrice = toNumber(campaign?.originalPrice, regularPage ? 5600 : 1500);
-  const phone = campaign?.phone || "+8808647-222899";
+  const phone =
+    String(campaign?.phone || "").trim() ||
+    footerSettings?.header?.supportPhone ||
+    footerSettings?.footer?.supportPhone ||
+    footerSettings?.contact?.hotlineNumber ||
+    footerSettings?.contact?.phoneNumber ||
+    footerSettings?.contact?.phone ||
+    "";
   const shortDescription = stripHtml(campaign?.shortDescription || "");
   const descriptionTitle =
     campaign?.descriptionTitle || "এই ক্যাম্পেইনের বিশেষ অফার";
@@ -213,6 +229,8 @@ export default function LandingPageViewPage({ campaign }) {
   }, []);
 
   useEffect(() => {
+    if (!trackingEnabled || !campaign?.Id || viewedCampaignRef.current === campaign.Id) return;
+    viewedCampaignRef.current = campaign.Id;
     const contentId = String(campaign?.productId || campaign?.Id || "");
     const commonData = {
       content_ids: contentId ? [contentId] : [],
@@ -225,7 +243,7 @@ export default function LandingPageViewPage({ campaign }) {
     };
     void trackMarketingEvent("PageView");
     void trackMarketingEvent("ViewContent", { customData: commonData });
-  }, [campaign?.Id, campaign?.productId, price, title]);
+  }, [campaign?.Id, campaign?.productId, price, title, trackingEnabled]);
 
   useEffect(() => {
     let active = true;
@@ -277,11 +295,32 @@ export default function LandingPageViewPage({ campaign }) {
     [campaign?.Id, landingPages],
   );
 
+  function startCheckout() {
+    if (!trackingEnabled || checkoutCampaignRef.current === campaign?.Id) return;
+    checkoutCampaignRef.current = campaign?.Id;
+    void trackMarketingEvent("InitiateCheckout", { enabled: trackingEnabled, customData: {
+      content_ids: getSelectedOrderItems().map((item) => String(item.productId || item.id)),
+      content_type: "product", value: total, currency: "BDT",
+    } });
+  }
+
+  function trackAddedProduct(item, quantity = 1) {
+    if (!trackingEnabled) return;
+    void trackMarketingEvent("AddToCart", { enabled: trackingEnabled, customData: {
+      content_ids: [String(item.productId || item.id)], content_type: "product",
+      contents: [{ id: String(item.productId || item.id), quantity, item_price: item.price }],
+      value: item.price * quantity, currency: "BDT",
+    } });
+  }
+
   function set(field, value) {
+    startCheckout();
     setForm((previous) => ({ ...previous, [field]: value }));
   }
 
   function toggleProductOption(option) {
+    startCheckout();
+    if (!selectedProducts.some((item) => item.id === option.id)) trackAddedProduct(option);
     setSelectedProducts((current) => {
       const exists = current.some((item) => item.id === option.id);
       if (exists) {
@@ -293,6 +332,9 @@ export default function LandingPageViewPage({ campaign }) {
   }
 
   function changeProductQty(optionId, delta) {
+    startCheckout();
+    const item = selectedProducts.find((entry) => entry.id === optionId);
+    if (item && delta > 0) trackAddedProduct(item, delta);
     setSelectedProducts((current) =>
       current.map((item) =>
         item.id === optionId ? { ...item, qty: Math.max(1, item.qty + delta) } : item,
@@ -415,6 +457,8 @@ export default function LandingPageViewPage({ campaign }) {
   ]);
 
   async function handlePlaceOrder() {
+    if (placingOrder || placedOrder) return;
+    startCheckout();
     setOrderError("");
     const normalizedPhone = normalizeBangladeshPhone(form.phone);
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
@@ -452,16 +496,14 @@ export default function LandingPageViewPage({ campaign }) {
       num_items: selectedItems.reduce((sum, item) => sum + item.qty, 0),
     };
     const trackingUser = { name: form.name.trim(), phone: normalizedPhone };
-    void trackMarketingEvent("InitiateCheckout", {
-      userData: trackingUser,
-      customData: trackingData,
-    });
+
     try {
       void trackMarketingEvent("AddPaymentInfo", {
         userData: trackingUser,
         customData: trackingData,
       });
       const payload = buildLandingOrderPayload({ phoneNumber: normalizedPhone });
+      payload.landingTracking = { enabled: trackingEnabled, eventSourceUrl: window.location.href, customData: trackingData };
       const response = await orderService.createOrder(payload);
       const placedOrderData = response.data || payload;
       setPlacedOrder(placedOrderData);
@@ -469,6 +511,9 @@ export default function LandingPageViewPage({ campaign }) {
       incompletePhoneRef.current = "";
       leadTrackedOrderIdRef.current = null;
       void trackMarketingEvent("Purchase", {
+        enabled: trackingEnabled,
+        eventId: placedOrderData.purchaseEventId,
+        server: !placedOrderData.purchaseEventId,
         userData: {
           ...trackingUser,
           customerId: placedOrderData.customerId || placedOrderData.customer?.Id,
@@ -1144,8 +1189,6 @@ function RegularLandingTemplate({ data, campaign }) {
     productName,
     title,
     subTitle,
-    price,
-    originalPrice,
     phone,
     shortDescription,
     descriptionTitle,
@@ -1184,6 +1227,11 @@ function RegularLandingTemplate({ data, campaign }) {
   const reviewRegularPriceLabel = regularData.reviewRegularPriceLabel || "";
   const reviewOfferPriceLabel = regularData.reviewOfferPriceLabel || "";
   const reviewButtonText = regularData.reviewButtonText || "";
+  // Page-level prices win; otherwise show the first checkout product's prices.
+  const reviewOfferPrice =
+    toNumber(campaign?.price, 0) || toNumber(productOptions[0]?.price, 0);
+  const reviewRegularPrice =
+    toNumber(campaign?.originalPrice, 0) || toNumber(productOptions[0]?.originalPrice, 0);
   const hasReviewSectionContent = Boolean(
     reviewHeading ||
     reviewSubHeading ||
@@ -1262,14 +1310,14 @@ function RegularLandingTemplate({ data, campaign }) {
               {reviewSubHeading}
             </p>
           )}
-          {reviewRegularPriceLabel && (
+          {reviewRegularPriceLabel && reviewRegularPrice > 0 && (
             <p className="mt-12 text-2xl font-black text-slate-600">
-              {reviewRegularPriceLabel} <span className="line-through">{formatMoney(originalPrice)}/- টাকা</span>
+              {reviewRegularPriceLabel} <span className="line-through">{formatMoney(reviewRegularPrice)}/- টাকা</span>
             </p>
           )}
-          {reviewOfferPriceLabel && (
+          {reviewOfferPriceLabel && reviewOfferPrice > 0 && (
             <p className="mt-5 text-3xl font-black md:text-5xl" style={{ color: colors.headingColor }}>
-              {reviewOfferPriceLabel} <span className="text-green-600">{formatMoney(price)}/- টাকা</span>
+              {reviewOfferPriceLabel} <span className="text-green-600">{formatMoney(reviewOfferPrice)}/- টাকা</span>
             </p>
           )}
           {reviewButtonText && (
@@ -1341,14 +1389,16 @@ function RegularLandingTemplate({ data, campaign }) {
               <p>✅ ১০০% অরিজিনাল পণ্য ✅ দ্রুত ডেলিভারি ✅ ক্যাশ অন ডেলিভারি সুবিধা ✅ সহজ অর্ডার প্রক্রিয়া</p>
             )}
           </div>
-          <a
-            href={`tel:${String(phone).replace(/\s+/g, "")}`}
-            onClick={() => trackLandingContactClick("Landing phone", phone)}
-            className="mt-12 inline-flex items-center justify-center rounded-full border-4 border-white px-8 py-3 text-xl font-black shadow"
-            style={{ backgroundColor: colors.buttonColor, color: colors.buttonTextColor }}
-          >
-            📞 {phone}
-          </a>
+          {phone ? (
+            <a
+              href={`tel:${String(phone).replace(/\s+/g, "")}`}
+              onClick={() => trackLandingContactClick("Landing phone", phone)}
+              className="mt-12 inline-flex items-center justify-center rounded-full border-4 border-white px-8 py-3 text-xl font-black shadow"
+              style={{ backgroundColor: colors.buttonColor, color: colors.buttonTextColor }}
+            >
+              📞 {phone}
+            </a>
+          ) : null}
         </div>
       </section>
 

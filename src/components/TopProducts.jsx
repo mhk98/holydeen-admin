@@ -7,7 +7,7 @@ export default function TopProducts({ topProducts = [], loading, onViewAll }) {
     <div className="bg-white rounded-xl shadow overflow-hidden">
       <div
         className="flex items-center justify-between px-4 py-3"
-        style={{ background: "linear-gradient(90deg, #071B52, #173D7D)" }}
+        style={{ background: "linear-gradient(90deg, #1C2744, #3A4B78)" }}
       >
         <span className="text-white font-semibold text-sm">
           Top Selling Products

@@ -24,7 +24,7 @@ import { imageUrl } from "../utils/assetUrl";
 // ── Delivery areas ─────────────────────────────────────────
 const deliveryAreas = [
   { label: "ঢাকার ভিতরে ৮০ টাকা", fee: 80 },
-  { label: "ঢাকার বাইরে ১২০ টাকা", fee: 120 },
+  { label: "ঢাকার বাইরে ১৩০ টাকা", fee: 130 },
   { label: "চট্টগ্রাম ১৫০ টাকা", fee: 150 },
   { label: "সিলেট ১৫০ টাকা", fee: 150 },
   { label: "রাজশাহী ১৩০ টাকা", fee: 130 },
@@ -78,6 +78,7 @@ export default function CreateOrderPage({ onNavigate }) {
   const [isGuest, setIsGuest] = useState(false);
   const [phone, setPhone] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [address, setAddress] = useState("");
   const [areaIdx, setAreaIdx] = useState(0);
   const [discount, setDiscount] = useState("");
   const [advanced, setAdvanced] = useState("");
@@ -137,6 +138,10 @@ export default function CreateOrderPage({ onNavigate }) {
       alert("Phone number দিন");
       return;
     }
+    if (!isGuest && !address.trim()) {
+      alert("Customer এর পুরো ঠিকানা দিন");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -147,7 +152,7 @@ export default function CreateOrderPage({ onNavigate }) {
       const payload = {
         customerName: isGuest ? "Guest" : customerName.trim() || "Guest",
         customerPhone: isGuest ? "Guest" : phone.trim(),
-        customerArea: deliveryAreas[areaIdx].label,
+        customerArea: address.trim() || null,
         productName,
         productImage,
         quantity,
@@ -375,10 +380,17 @@ export default function CreateOrderPage({ onNavigate }) {
                     No customers found
                   </div>
                 )}
+                <textarea
+                  placeholder="Customer এর পুরো ঠিকানা"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+                />
               </>
             )}
 
-            {/* Address / Delivery area */}
+            {/* Delivery area */}
             <div className="relative">
               <select
                 value={areaIdx}

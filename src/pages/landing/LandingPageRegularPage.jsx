@@ -466,6 +466,9 @@ function buildRegularFormState(campaign) {
     bannerImageUrl: campaign?.bannerImageUrl || '',
     campaignTitle: campaign?.title || campaign?.campaignTitle || '',
     subTitle: campaign?.subTitle || '',
+    phone: campaign?.phone || '',
+    price: Number(campaign?.price) > 0 ? String(Number(campaign.price)) : '',
+    originalPrice: Number(campaign?.originalPrice) > 0 ? String(Number(campaign.originalPrice)) : '',
     priceLine: regularData.priceLine || '',
     pricePrefix: regularData.pricePrefix || 'মাত্র',
     priceSuffix: regularData.priceSuffix || 'টাকায়',
@@ -572,6 +575,9 @@ export default function LandingPageRegularPage({ mode = 'create', campaign, onNa
         productId: form.productId || null,
         title: form.campaignTitle,
         subTitle: form.subTitle,
+        phone: form.phone,
+        price: form.price,
+        originalPrice: form.originalPrice,
         bannerImageUrl,
         shortDescription: form.shortDescription,
         video: form.video,
@@ -691,6 +697,7 @@ export default function LandingPageRegularPage({ mode = 'create', campaign, onNa
 
           <TextInput label="Campaign Title" value={form.campaignTitle} onChange={(value) => set('campaignTitle', value)} required />
           <TextInput label="Sub Title (optional)" value={form.subTitle} onChange={(value) => set('subTitle', value)} />
+          <TextInput label="Phone Number" value={form.phone} onChange={(value) => set('phone', value)} />
           <TextInput label="Price Line Text" value={form.priceLine} onChange={(value) => set('priceLine', value)} />
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <TextInput label="Price Prefix" value={form.pricePrefix} onChange={(value) => set('pricePrefix', value)} />
@@ -780,6 +787,10 @@ export default function LandingPageRegularPage({ mode = 'create', campaign, onNa
             <TextInput label="Review Regular Price Label" value={form.reviewRegularPriceLabel} onChange={(value) => set('reviewRegularPriceLabel', value)} />
             <TextInput label="Review Offer Price Label" value={form.reviewOfferPriceLabel} onChange={(value) => set('reviewOfferPriceLabel', value)} />
             <TextInput label="Review Button Text" value={form.reviewButtonText} onChange={(value) => set('reviewButtonText', value)} />
+          </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <TextInput label="Regular Price (ফাঁকা রাখলে প্রথম product-এর old price)" type="number" value={form.originalPrice} onChange={(value) => set('originalPrice', value)} />
+            <TextInput label="Offer Price (ফাঁকা রাখলে প্রথম product-এর price)" type="number" value={form.price} onChange={(value) => set('price', value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
