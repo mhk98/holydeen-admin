@@ -1743,7 +1743,7 @@ function OrderInvoicePage({ order, settings }) {
   const sellerPhone = settings.phone || settings.phoneNumber || "+880 1354-427155";
   const sellerEmail = settings.email || "holydeenbd@gmail.com";
   const sellerAddress =
-    settings.address || "34/4/A-3, Shanti Kunjo, Press er Goli, North Bashabo, Sabujbag, Dhaka";
+    settings.address || "House-13, Block-D, Road-1, Mirpur-2, Dhaka";
   const logo = getLogo(settings) || "/homzify-logo.jpeg";
   const customerAddress =
     order.customerAddress ||
