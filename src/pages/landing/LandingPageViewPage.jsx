@@ -1,3 +1,4 @@
+import { useCheckoutSession } from "../../utils/useCheckoutSession";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -165,6 +166,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
   const [showTrackOrder, setShowTrackOrder] = useState(false);
   const [footerSettings, setFooterSettings] = useState(null);
   const [footerPages, setFooterPages] = useState([]);
+  const checkout = useCheckoutSession();
   const incompleteOrderIdRef = useRef(null);
   const incompletePhoneRef = useRef("");
   const leadTrackedOrderIdRef = useRef(null);
@@ -370,6 +372,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
     const tracking = getTrackingClickData();
 
     return {
+      checkoutKey: checkout.getKey(normalizedPhone),
       ...(incompleteOrderId ? { incompleteOrderId } : {}),
       deviceId: getLandingDeviceId(),
       customerName: form.name.trim(),
@@ -411,6 +414,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
     }
 
     const timer = window.setTimeout(async () => {
+      if (checkout.submitting.current) return;
       try {
         const response = await orderService.saveIncompleteOrder(
           buildLandingOrderPayload({ status: "incomplete", phoneNumber: normalizedPhone }),
@@ -457,7 +461,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
   ]);
 
   async function handlePlaceOrder() {
-    if (placingOrder || placedOrder) return;
+    if (checkout.submitting.current || placingOrder || placedOrder) return;
     startCheckout();
     setOrderError("");
     const normalizedPhone = normalizeBangladeshPhone(form.phone);
@@ -478,6 +482,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
       return;
     }
 
+    checkout.submitting.current = true;
     setPlacingOrder(true);
     const selectedItems = getSelectedOrderItems();
     const contentId = String(selectedItems[0]?.productId || campaign?.productId || campaign?.Id || "");
@@ -507,6 +512,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
       const response = await orderService.createOrder(payload);
       const placedOrderData = response.data || payload;
       setPlacedOrder(placedOrderData);
+      checkout.complete();
       incompleteOrderIdRef.current = null;
       incompletePhoneRef.current = "";
       leadTrackedOrderIdRef.current = null;
@@ -525,6 +531,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
+      checkout.submitting.current = false;
       setOrderError(err.message || "Order create failed. Please try again.");
     } finally {
       setPlacingOrder(false);

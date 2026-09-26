@@ -1,3 +1,4 @@
+import { useCheckoutSession } from "../utils/useCheckoutSession";
 import { useState, useMemo } from "react";
 import {
   Search,
@@ -72,6 +73,7 @@ function toId(value) {
 }
 
 export default function CreateOrderPage({ onNavigate }) {
+  const checkout = useCheckoutSession();
   // Cart state
   const [cart, setCart] = useState([]);
   // Customer
@@ -133,6 +135,7 @@ export default function CreateOrderPage({ onNavigate }) {
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
+    if (checkout.submitting.current) return;
     if (cart.length === 0) return;
     if (!isGuest && !phone.trim()) {
       alert("Phone number দিন");
@@ -143,6 +146,7 @@ export default function CreateOrderPage({ onNavigate }) {
       return;
     }
 
+    checkout.submitting.current = true;
     setSubmitting(true);
     try {
       const productName = cart.map((i) => `${i.name} x${i.qty}`).join(", ");
@@ -150,6 +154,7 @@ export default function CreateOrderPage({ onNavigate }) {
       const quantity = cart.reduce((sum, i) => sum + i.qty, 0);
 
       const payload = {
+        checkoutKey: checkout.getKey(isGuest ? "Guest" : phone.trim()),
         customerName: isGuest ? "Guest" : customerName.trim() || "Guest",
         customerPhone: isGuest ? "Guest" : phone.trim(),
         customerArea: address.trim() || null,
@@ -162,12 +167,14 @@ export default function CreateOrderPage({ onNavigate }) {
       };
 
       await orderService.createOrder(payload);
+      checkout.complete();
       alert("Order সফলভাবে তৈরি হয়েছে!");
       clearCart();
       onNavigate && onNavigate("orders");
     } catch (err) {
       alert(err.message || "Order তৈরি করতে সমস্যা হয়েছে");
     } finally {
+      checkout.submitting.current = false;
       setSubmitting(false);
     }
   }
