@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Upload, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, Upload, Trash2, X } from "lucide-react";
 import {
   categoryService,
   subcategoryService,
@@ -11,6 +11,8 @@ import {
 } from "../../services/productService";
 import { supplierService } from "../../services/supplierService";
 import RichEditor from "../../components/RichEditor";
+import VariantBuilder from "../../components/VariantBuilder";
+import { variantsFromProduct, serializeVariants, clearImageRef, shiftNewImageRefs } from "../../utils/variants";
 import { apiRequest } from "../../utils/apiClient";
 import { imageUrl } from "../../utils/assetUrl";
 
@@ -54,34 +56,6 @@ function FormField({ label, required, children }) {
 const inputCls =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 bg-white";
 const selectCls = `${inputCls} appearance-none`;
-const emptyVariation = {
-  purchasePrice: "",
-  oldPrice: "",
-  discountPercent: "",
-  newPrice: "",
-  stock: "",
-};
-
-function clampDiscount(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return "";
-  return Math.max(0, Math.min(100, num));
-}
-
-function calcDiscountPercent(oldPrice, newPrice) {
-  const oldNum = Number(oldPrice);
-  const newNum = Number(newPrice);
-  if (!oldNum || !newNum || oldNum <= newNum) return "";
-  return Number((((oldNum - newNum) / oldNum) * 100).toFixed(2));
-}
-
-function calcDiscountedPrice(oldPrice, discountPercent) {
-  const oldNum = Number(oldPrice);
-  const discountNum = Number(discountPercent);
-  if (!oldNum || Number.isNaN(discountNum)) return "";
-  return Math.max(0, Math.round(oldNum - (oldNum * discountNum) / 100));
-}
-
 export default function ProductEditPage({ product, onNavigate }) {
   const fileInputRef = useRef(null);
 
@@ -137,19 +111,9 @@ export default function ProductEditPage({ product, onNavigate }) {
   const [isDragging, setIsDragging] = useState(false);
 
   // ----- variations -----
-  const initVariations = product?.variations?.length
-    ? product.variations.map((v) => ({
-        id: v.Id,
-        purchasePrice: v.purchasePrice || "",
-        oldPrice: v.oldPrice || "",
-        discountPercent: calcDiscountPercent(v.oldPrice, v.newPrice),
-        newPrice: v.newPrice || "",
-        stock: v.stock || 0,
-        colorId: v.colorId || "",
-        attribute: v.attribute || "",
-      }))
-    : [emptyVariation];
-  const [variations, setVariations] = useState(initVariations);
+  const [variations, setVariations] = useState(() =>
+    variantsFromProduct(product?.variations),
+  );
 
   // ----- dropdowns -----
   const [categories, setCategories] = useState([]);
@@ -171,14 +135,6 @@ export default function ProductEditPage({ product, onNavigate }) {
   );
   const [selectedBrand, setSelectedBrand] = useState(
     product?.brandId ? String(product.brandId) : "",
-  );
-  const [selectedColor, setSelectedColor] = useState(
-    initVariations.find((variation) => variation.colorId)?.colorId
-      ? String(initVariations.find((variation) => variation.colorId).colorId)
-      : "",
-  );
-  const [selectedAttribute, setSelectedAttribute] = useState(
-    initVariations.find((variation) => variation.attribute)?.attribute || "",
   );
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [payAmount, setPayAmount] = useState("");
@@ -270,43 +226,21 @@ export default function ProductEditPage({ product, onNavigate }) {
   }
   function removeExisting(filename) {
     setKeptImages((prev) => prev.filter((f) => f !== filename));
+    setVariations((prev) => clearImageRef(prev, filename));
   }
   function removeNew(idx) {
     setNewImageFiles((prev) => prev.filter((_, i) => i !== idx));
     setNewImagePreviews((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  // variations
-  function addVariation() {
-    setVariations((prev) => [...prev, emptyVariation]);
-  }
-  function updateVariation(idx, field, val) {
-    setVariations((prev) =>
-      prev.map((v, i) => {
-        if (i !== idx) return v;
-        const next = { ...v, [field]: val };
-        if (field === "discountPercent") {
-          const discount = clampDiscount(val);
-          next.discountPercent = discount;
-          next.newPrice = calcDiscountedPrice(next.oldPrice, discount);
-        }
-        if (field === "oldPrice" && next.discountPercent !== "") {
-          next.newPrice = calcDiscountedPrice(val, next.discountPercent);
-        }
-        if (field === "newPrice") {
-          next.discountPercent = calcDiscountPercent(next.oldPrice, val);
-        }
-        return next;
-      }),
-    );
-  }
-  function removeVariation(idx) {
-    setVariations((prev) => prev.filter((_, i) => i !== idx));
+    setVariations((prev) => shiftNewImageRefs(prev, idx));
   }
 
   async function handleSubmit() {
     if (!name.trim()) {
       setSubmitError("Product name is required");
+      return;
+    }
+    if (!serializeVariants(variations).length) {
+      setSubmitError("অন্তত একটি variant-এর New Price দিন");
       return;
     }
     setSubmitting(true);
@@ -338,18 +272,7 @@ export default function ProductEditPage({ product, onNavigate }) {
       if (purchaseEnabled && payAmount) fd.append("payAmount", payAmount);
       if (purchaseEnabled && purchaseDate) fd.append("purchaseDate", purchaseDate);
       fd.append("keptImages", JSON.stringify(keptImages));
-      fd.append(
-        "variations",
-        JSON.stringify(
-          variations
-            .filter((v) => v.newPrice || v.purchasePrice)
-            .map((v) => ({
-              ...v,
-              colorId: selectedColor || v.colorId || null,
-              attribute: selectedAttribute || v.attribute || null,
-            })),
-        ),
-      );
+      fd.append("variations", JSON.stringify(serializeVariants(variations)));
       newImageFiles.forEach((f) => fd.append("gallery_images", f));
 
       await apiRequest(`/product/${product.Id}`, { method: "PUT", body: fd });
@@ -410,26 +333,6 @@ export default function ProductEditPage({ product, onNavigate }) {
                 onChange={(e) => setSlug(e.target.value)}
                 className={inputCls}
               />
-            </FormField>
-            <FormField label="Attribute">
-              <div className="relative">
-                <select
-                  className={selectCls}
-                  value={selectedAttribute}
-                  onChange={(e) => setSelectedAttribute(e.target.value)}
-                >
-                  <option value="">Select Attribute</option>
-                  {attributes.map((attribute) => (
-                    <option key={attribute.Id} value={attribute.name}>
-                      {attribute.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={13}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                />
-              </div>
             </FormField>
           </div>
 
@@ -653,135 +556,16 @@ export default function ProductEditPage({ product, onNavigate }) {
 
       {/* Price & Variation */}
       <SectionCard title="Price & Variation">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 items-end">
-            <FormField label="Color">
-              <div className="relative">
-                <select
-                  className={selectCls}
-                  value={selectedColor}
-                  onChange={(e) => setSelectedColor(e.target.value)}
-                >
-                  <option value="">Select Color</option>
-                  {colors.map((color) => (
-                    <option key={color.Id} value={color.Id}>
-                      {color.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={13}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                />
-              </div>
-            </FormField>
-          </div>
-          <div className="border border-gray-200 rounded-lg overflow-x-auto">
-            <table className="w-full min-w-[760px] text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-2.5 text-left text-gray-600 font-semibold">
-                    Purchase Price
-                  </th>
-                  <th className="px-4 py-2.5 text-left text-gray-600 font-semibold">
-                    Old Price
-                  </th>
-                  <th className="px-4 py-2.5 text-left text-gray-600 font-semibold">
-                    Discount %
-                  </th>
-                  <th className="px-4 py-2.5 text-left text-gray-600 font-semibold">
-                    New Price
-                  </th>
-                  <th className="px-4 py-2.5 text-left text-gray-600 font-semibold">
-                    Stock
-                  </th>
-                  <th className="px-4 py-2.5 text-center w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {variations.map((v, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-gray-100 last:border-0"
-                  >
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        value={v.purchasePrice}
-                        onChange={(e) =>
-                          updateVariation(i, "purchasePrice", e.target.value)
-                        }
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        value={v.oldPrice}
-                        onChange={(e) =>
-                          updateVariation(i, "oldPrice", e.target.value)
-                        }
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={v.discountPercent}
-                        onChange={(e) =>
-                          updateVariation(i, "discountPercent", e.target.value)
-                        }
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                        placeholder="%"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        value={v.newPrice}
-                        onChange={(e) =>
-                          updateVariation(i, "newPrice", e.target.value)
-                        }
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        value={v.stock}
-                        onChange={(e) =>
-                          updateVariation(i, "stock", e.target.value)
-                        }
-                        className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {variations.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeVariation(i)}
-                          className="text-red-400 hover:text-red-600 transition"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button
-            type="button"
-            onClick={addVariation}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition"
-          >
-            <Plus size={13} /> Add Variation
-          </button>
-        </div>
+        <VariantBuilder
+          attributes={attributes}
+          colors={colors}
+          images={[
+            ...keptImages.map((filename) => ({ ref: filename, src: imageUrl(filename) })),
+            ...newImagePreviews.map((src, i) => ({ ref: `new:${i}`, src })),
+          ]}
+          rows={variations}
+          onChange={setVariations}
+        />
       </SectionCard>
 
       {/* Purchase */}

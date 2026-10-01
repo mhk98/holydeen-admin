@@ -27,10 +27,14 @@ import {
 } from "../../services/websiteService";
 import { imageUrl } from "../../utils/assetUrl";
 
-const SHIPPING_OPTIONS = [
-  { id: "inside", label: "Inside Dhaka", charge: 80 },
-  { id: "outside", label: "Outside Dhaka", charge: 130 },
-];
+// Same rules as the storefront landing page and the order API (regularData.deliveryInside/Outside).
+function getShippingOptions(campaign) {
+  const regularData = parseObject(campaign?.regularData);
+  return [
+    { id: "inside", label: "Inside Dhaka", banglaLabel: "ঢাকার ভিতরে", charge: toNumber(regularData.deliveryInside, 70) },
+    { id: "outside", label: "Outside Dhaka", banglaLabel: "ঢাকার বাইরে", charge: toNumber(regularData.deliveryOutside, 130) },
+  ];
+}
 
 const DEVICE_ID_KEY = "holydeen_device_id";
 
@@ -202,8 +206,9 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
   const [selectedProducts, setSelectedProducts] = useState(() =>
     initializeSelectedProducts(productOptions),
   );
+  const shippingOptions = useMemo(() => getShippingOptions(campaign), [campaign]);
   const deliveryCharge =
-    SHIPPING_OPTIONS.find((option) => option.id === form.shipping)?.charge || 0;
+    shippingOptions.find((option) => option.id === form.shipping)?.charge || 0;
   const productSubtotal = selectedProducts.reduce(
     (sum, item) => sum + item.price * item.qty,
     0,
@@ -350,55 +355,43 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
       : initializeSelectedProducts(productOptions);
   }
 
-  function buildLandingOrderPayload({ status = "pending", phoneNumber } = {}) {
+  function buildLandingOrderPayload({ phoneNumber } = {}) {
     const selectedItems = getSelectedOrderItems();
-    const shippingLabel =
-      SHIPPING_OPTIONS.find((option) => option.id === form.shipping)?.label ||
-      "Inside Dhaka";
-    const today = new Date().toISOString().slice(0, 10);
-    const productSummary = selectedItems.map((item) => `${item.name} x${item.qty}`).join(", ");
-    const orderItems = selectedItems.map((item) => ({
-      productId: item.productId || item.id,
-      name: item.name,
-      qty: item.qty,
-      price: item.price,
-      total: item.price * item.qty,
-      image: item.image || "",
-    }));
     const normalizedPhone = phoneNumber || normalizeBangladeshPhone(form.phone) || form.phone.trim();
     const incompleteOrderId =
       incompletePhoneRef.current === normalizedPhone ? incompleteOrderIdRef.current : null;
-
     const tracking = getTrackingClickData();
 
+    // Prices and delivery charge are recalculated by the order API from this landing page.
     return {
       checkoutKey: checkout.getKey(normalizedPhone),
       ...(incompleteOrderId ? { incompleteOrderId } : {}),
       deviceId: getLandingDeviceId(),
-      customerName: form.name.trim(),
+      source: "Landing Page",
+      orderSource: "Landing Page",
+      customerName: form.name.trim() || "Landing Customer",
       customerPhone: normalizedPhone,
       customerAddress: form.address.trim(),
-      customerArea: shippingLabel,
-      customerDistrict: "",
-      productName: productSummary || productName,
-      productImage: selectedItems[0]?.image || "",
-      quantity: selectedItems.reduce((sum, item) => sum + item.qty, 0),
-      totalBill: total,
+      customerDistrict: form.shipping === "outside" ? "outside" : "inside",
+      paymentMethod: "cod",
+      items: selectedItems.map((item) => ({
+        id: Number(item.productId) || Number(campaign?.Id) || 0,
+        name: item.name,
+        image: item.image || "",
+        price: item.price,
+        qty: item.qty,
+      })),
+      subtotal: productSubtotal,
+      deliveryCharge,
+      discount: 0,
       advance: 0,
-      courier: "",
-      status,
-      note: JSON.stringify({
+      total,
+      tracking: {
+        ...(tracking || {}),
+        source: "Landing Page",
+        landingPageId: campaign?.Id,
         landingPage: title,
-        customerAddress: form.address.trim(),
-        paymentMethod: "cod",
-        items: orderItems,
-        subtotal: productSubtotal,
-        deliveryCharge,
-        total,
-        tracking,
-      }),
-      tracking,
-      orderDate: today,
+      },
     };
   }
 
@@ -417,7 +410,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
       if (checkout.submitting.current) return;
       try {
         const response = await orderService.saveIncompleteOrder(
-          buildLandingOrderPayload({ status: "incomplete", phoneNumber: normalizedPhone }),
+          buildLandingOrderPayload({ phoneNumber: normalizedPhone }),
         );
         const draft = response?.data || response || {};
         const draftId = draft.Id || draft.id;
@@ -561,6 +554,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
     prizeImageSource,
     reviewImages,
     deliveryCharge,
+    shippingOptions,
     productOptions,
     selectedProducts,
     productSubtotal,
@@ -584,8 +578,8 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
         productName={productName}
         productImage={bannerImage}
         price={price}
-        deliveryCharge={deliveryCharge}
-        total={total}
+        deliveryCharge={placedOrder.deliveryCharge ?? deliveryCharge}
+        total={placedOrder.total ?? total}
         phoneNumber={phone}
         onContinue={() => setPlacedOrder(null)}
         onTrack={() => {
@@ -825,7 +819,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
                   icon={<Truck size={15} />}
                 >
                   <div className="grid gap-3 md:grid-cols-2">
-                    {SHIPPING_OPTIONS.map((option) => (
+                    {shippingOptions.map((option) => (
                       <RadioOption
                         key={option.id}
                         selected={form.shipping === option.id}
@@ -1201,6 +1195,7 @@ function RegularLandingTemplate({ data, campaign }) {
     descriptionTitle,
     bannerImage,
     deliveryCharge,
+    shippingOptions,
     productOptions,
     selectedProducts,
     productSubtotal,
@@ -1431,7 +1426,7 @@ function RegularLandingTemplate({ data, campaign }) {
               <RegularOrderInput icon={<Phone size={18} />} placeholder="মোবাইল নাম্বার দিন" value={form.phone} onChange={(value) => set("phone", value)} />
               <RegularOrderInput icon={<Package size={18} />} placeholder="আপনার সম্পূর্ণ ঠিকানা" value={form.address} onChange={(value) => set("address", value)} />
               <div className="mt-4 overflow-hidden rounded border border-slate-200">
-                {SHIPPING_OPTIONS.map((option) => (
+                {shippingOptions.map((option) => (
                   <button
                     key={option.id}
                     type="button"
@@ -1439,7 +1434,7 @@ function RegularLandingTemplate({ data, campaign }) {
                     className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm last:border-b-0"
                   >
                     <span className={`h-5 w-5 rounded-full border ${form.shipping === option.id ? "border-green-600 bg-green-600" : "border-slate-300"}`} />
-                    {option.label === "Inside Dhaka" ? "ঢাকার ভিতরে ৮০ টাকা" : option.label === "Outside Dhaka" ? "ঢাকার বাইরে ১৩০ টাকা" : `${option.label} ${option.charge} টাকা`}
+                    {`${option.banglaLabel} ${option.charge} টাকা`}
                   </button>
                 ))}
               </div>
@@ -2354,6 +2349,7 @@ function OrderFormBlock({ data, compact }) {
     price,
     bannerImage,
     deliveryCharge,
+    shippingOptions,
     total,
     placingOrder,
     orderError,
@@ -2410,7 +2406,7 @@ function OrderFormBlock({ data, compact }) {
             <div
               className={compact ? "grid gap-3" : "grid gap-3 md:grid-cols-2"}
             >
-              {SHIPPING_OPTIONS.map((option) => (
+              {shippingOptions.map((option) => (
                 <RadioOption
                   key={option.id}
                   selected={form.shipping === option.id}

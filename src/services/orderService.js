@@ -10,6 +10,9 @@ export const orderService = {
   trackOrders: (phone) => apiRequest(`/orders/track${buildQuery({ phone })}`),
   createOrder: (data) =>
     apiRequest("/orders", { method: "POST", body: JSON.stringify(data) }),
+  // Staff-created orders (POS) — authenticated, staff prices, variant stock tracked.
+  createStaffOrder: (data) =>
+    apiRequest("/orders/admin", { method: "POST", body: JSON.stringify(data) }),
   saveIncompleteOrder: (data) =>
     apiRequest("/orders/incomplete", { method: "POST", body: JSON.stringify(data) }),
   updateOrder: (id, data) =>

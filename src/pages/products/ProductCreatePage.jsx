@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Upload, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Upload, Trash2 } from 'lucide-react';
 import {
   categoryService, subcategoryService, childcategoryService, brandService, colorService, attributeService,
 } from '../../services/productService';
 import { supplierService } from '../../services/supplierService';
 import RichEditor from '../../components/RichEditor';
+import VariantBuilder from '../../components/VariantBuilder';
+import { newVariantRows, serializeVariants, shiftNewImageRefs } from '../../utils/variants';
 
 function Toggle({ checked, onChange }) {
   return (
@@ -43,29 +45,6 @@ function FormField({ label, required, children }) {
 
 const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 bg-white';
 const selectCls = `${inputCls} appearance-none`;
-const emptyVariation = { purchasePrice: '', oldPrice: '', discountPercent: '', newPrice: '', stock: '', availability: 'in stock' };
-const emptyColorRow = () => ({ key: `${Date.now()}-${Math.random()}`, colorId: '', colorImageName: '' });
-
-function clampDiscount(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return '';
-  return Math.max(0, Math.min(100, num));
-}
-
-function calcDiscountPercent(oldPrice, newPrice) {
-  const oldNum = Number(oldPrice);
-  const newNum = Number(newPrice);
-  if (!oldNum || !newNum || oldNum <= newNum) return '';
-  return Number((((oldNum - newNum) / oldNum) * 100).toFixed(2));
-}
-
-function calcDiscountedPrice(oldPrice, discountPercent) {
-  const oldNum = Number(oldPrice);
-  const discountNum = Number(discountPercent);
-  if (!oldNum || Number.isNaN(discountNum)) return '';
-  return Math.max(0, Math.round(oldNum - ((oldNum * discountNum) / 100)));
-}
-
 export default function ProductCreatePage({ onNavigate }) {
   // image files
   const [imageFiles, setImageFiles] = useState([]);
@@ -101,7 +80,7 @@ export default function ProductCreatePage({ onNavigate }) {
   const [purchaseEnabled, setPurchaseEnabled] = useState(true);
 
   // variations
-  const [variations, setVariations] = useState([emptyVariation]);
+  const [variations, setVariations] = useState(newVariantRows);
 
   // submit
   const [submitting, setSubmitting] = useState(false);
@@ -130,10 +109,6 @@ export default function ProductCreatePage({ onNavigate }) {
   const [selectedSub,    setSelectedSub]    = useState('');
   const [selectedChild,  setSelectedChild]  = useState('');
   const [selectedBrand,  setSelectedBrand]  = useState('');
-  const [selectedColorRows, setSelectedColorRows] = useState([emptyColorRow()]);
-  const [attributeDraft, setAttributeDraft] = useState('');
-  const [selectedAttributes, setSelectedAttributes] = useState([]);
-  const [bulkPrice, setBulkPrice] = useState({ purchasePrice: '', oldPrice: '', newPrice: '', stock: '' });
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -196,89 +171,12 @@ export default function ProductCreatePage({ onNavigate }) {
   function removeImage(idx) {
     setImageFiles(prev => prev.filter((_, i) => i !== idx));
     setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+    setVariations(prev => shiftNewImageRefs(prev, idx));
   }
-
-  function addVariation() {
-    setSelectedColorRows(prev => [...prev, emptyColorRow()]);
-  }
-
-  function getColorName(colorId) {
-    return colors.find(c => String(c.Id) === String(colorId))?.name || '';
-  }
-
-  function buildVariationKey(colorId, attribute) {
-    return `${colorId || 'none'}::${attribute || 'none'}`;
-  }
-
-  function addAttribute() {
-    if (!attributeDraft) return;
-    setSelectedAttributes(prev => (prev.includes(attributeDraft) ? prev : [...prev, attributeDraft]));
-    setAttributeDraft('');
-  }
-
-  function removeAttribute(value) {
-    setSelectedAttributes(prev => prev.filter(item => item !== value));
-  }
-
-  function updateColorRow(idx, field, val) {
-    setSelectedColorRows(prev => prev.map((row, i) => (i === idx ? { ...row, [field]: val } : row)));
-  }
-
-  function removeColorRow(idx) {
-    setSelectedColorRows(prev => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
-  }
-
-  function updateVariation(key, field, val) {
-    setVariations(prev => prev.map((v) => {
-      if (v.key !== key) return v;
-      const next = { ...v, [field]: val };
-      if (field === 'discountPercent') {
-        const discount = clampDiscount(val);
-        next.discountPercent = discount;
-        next.newPrice = calcDiscountedPrice(next.oldPrice, discount);
-      }
-      if (field === 'oldPrice' && next.discountPercent !== '') {
-        next.newPrice = calcDiscountedPrice(val, next.discountPercent);
-      }
-      if (field === 'newPrice') {
-        next.discountPercent = calcDiscountPercent(next.oldPrice, val);
-      }
-      return next;
-    }));
-  }
-
-  function applyBulkPrice() {
-    setVariations(prev => prev.map(v => {
-      const next = { ...v, ...bulkPrice };
-      next.discountPercent = calcDiscountPercent(next.oldPrice, next.newPrice);
-      return next;
-    }));
-  }
-
-  useEffect(() => {
-    setVariations(prev => {
-      const previous = new Map(prev.map(item => [item.key, item]));
-      const activeColors = selectedColorRows.filter(row => row.colorId);
-      const colorSet = activeColors.length ? activeColors : [{ colorId: '', colorImageName: '' }];
-      const attrSet = selectedAttributes.length ? selectedAttributes : [''];
-
-      return colorSet.flatMap(row => attrSet.map(attribute => {
-        const key = buildVariationKey(row.colorId, attribute);
-        return {
-          ...emptyVariation,
-          ...(previous.get(key) || {}),
-          key,
-          colorId: row.colorId || null,
-          colorName: getColorName(row.colorId),
-          colorImage: row.colorImageName || previous.get(key)?.colorImage || null,
-          attribute,
-        };
-      }));
-    });
-  }, [selectedColorRows, selectedAttributes, colors]);
 
   async function handleSubmit() {
     if (!name.trim()) { setSubmitError('Product name is required'); return; }
+    if (!serializeVariants(variations).length) { setSubmitError('অন্তত একটি variant-এর New Price দিন'); return; }
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -307,11 +205,7 @@ export default function ProductCreatePage({ onNavigate }) {
       if (purchaseEnabled && selectedSupplier) fd.append('supplierId', selectedSupplier);
       if (purchaseEnabled && payAmount) fd.append('payAmount', payAmount);
       if (purchaseEnabled && purchaseDate) fd.append('purchaseDate', purchaseDate);
-      fd.append('variations', JSON.stringify(
-        variations
-          .filter(v => v.newPrice || v.purchasePrice)
-          .map(({ key, colorName, discountPercent, ...v }) => v),
-      ));
+      fd.append('variations', JSON.stringify(serializeVariants(variations)));
       imageFiles.forEach(f => fd.append('gallery_images', f));
 
       const { apiRequest } = await import('../../utils/apiClient');
@@ -481,113 +375,7 @@ export default function ProductCreatePage({ onNavigate }) {
 
       {/* Price & Variation */}
       <SectionCard title="Price & Variation">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-6 space-y-3">
-              <FormField label="Color">
-                <div className="space-y-3">
-                  {selectedColorRows.map((row, idx) => (
-                    <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_44px]">
-                      <div className="relative">
-                        <select className={selectCls} value={row.colorId} onChange={e => updateColorRow(idx, 'colorId', e.target.value)}>
-                          <option value="">Select Color</option>
-                          {colors.map(color => (
-                            <option key={color.Id} value={color.Id}>{color.name}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
-                      <label className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-600 cursor-pointer hover:bg-gray-50 transition overflow-hidden">
-                        <input type="file" accept="image/*" className="hidden" onChange={e => updateColorRow(idx, 'colorImageName', e.target.files?.[0]?.name || '')} />
-                        <span className="shrink-0">Choose file</span>
-                        <span className="truncate text-gray-400">{row.colorImageName || 'No file chosen'}</span>
-                      </label>
-                      <button type="button" onClick={() => removeColorRow(idx)} disabled={selectedColorRows.length === 1} className="h-10 rounded-lg bg-rose-500 text-white inline-flex items-center justify-center disabled:opacity-40">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </FormField>
-              <button type="button" onClick={addVariation} className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition">
-                <Plus size={13} /> Add Color
-              </button>
-            </div>
-            <div className="lg:col-span-6">
-              <FormField label="Attribute">
-                <div className="flex min-h-10 flex-wrap items-center gap-2 border border-gray-300 rounded-lg px-2 py-1.5 bg-white">
-                  {selectedAttributes.map(attribute => (
-                    <button type="button" key={attribute} onClick={() => removeAttribute(attribute)} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
-                      × {attribute}
-                    </button>
-                  ))}
-                  <select className="min-w-[170px] flex-1 bg-transparent px-2 py-1 text-sm text-gray-700 focus:outline-none" value={attributeDraft} onChange={e => setAttributeDraft(e.target.value)}>
-                    <option value="">Select Attribute</option>
-                    {attributes.map(attribute => (
-                      <option key={attribute.Id} value={attribute.name}>{attribute.name}</option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={addAttribute} className="rounded bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
-                    Add
-                  </button>
-                </div>
-              </FormField>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] rounded-lg border border-gray-200 bg-gray-50 p-3">
-            <input type="number" className={inputCls} placeholder="Enter Purchase Price" value={bulkPrice.purchasePrice} onChange={e => setBulkPrice(prev => ({ ...prev, purchasePrice: e.target.value }))} />
-            <input type="number" className={inputCls} placeholder="Enter Old Price" value={bulkPrice.oldPrice} onChange={e => setBulkPrice(prev => ({ ...prev, oldPrice: e.target.value }))} />
-            <input type="number" className={inputCls} placeholder="Enter New Price" value={bulkPrice.newPrice} onChange={e => setBulkPrice(prev => ({ ...prev, newPrice: e.target.value }))} />
-            <input type="number" className={inputCls} placeholder="Enter Stock" value={bulkPrice.stock} onChange={e => setBulkPrice(prev => ({ ...prev, stock: e.target.value }))} />
-            <button type="button" onClick={applyBulkPrice} className="rounded-lg bg-indigo-600 px-4 text-xs font-bold text-white">
-              Apply Price
-            </button>
-          </div>
-
-          <div className="border border-gray-200 rounded-lg overflow-x-auto">
-            <table className="w-full min-w-[900px] text-xs">
-              <thead>
-                <tr className="bg-gray-100 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">Color</th>
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">Size</th>
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">Purchase Price</th>
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">Old Price</th>
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">Discount %</th>
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">New Price</th>
-                  <th className="px-4 py-3 text-left text-gray-600 font-semibold">Stock</th>
-                  <th className="px-4 py-3 text-center text-gray-600 font-semibold">Availability</th>
-                </tr>
-              </thead>
-              <tbody>
-                {variations.map((v) => (
-                  <tr key={v.key} className="border-b border-gray-100 last:border-0">
-                    <td className="px-4 py-2 text-gray-600">{v.colorName || '-'}</td>
-                    <td className="px-4 py-2 text-gray-600">{v.attribute || '-'}</td>
-                    <td className="px-3 py-2">
-                      <input type="number" value={v.purchasePrice} onChange={e => updateVariation(v.key, 'purchasePrice', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input type="number" value={v.oldPrice} onChange={e => updateVariation(v.key, 'oldPrice', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input type="number" min="0" max="100" step="0.01" value={v.discountPercent} onChange={e => updateVariation(v.key, 'discountPercent', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" placeholder="%" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input type="number" value={v.newPrice} onChange={e => updateVariation(v.key, 'newPrice', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input type="number" value={v.stock} onChange={e => updateVariation(v.key, 'stock', e.target.value)} className="w-full border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" />
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <Toggle checked={v.availability !== 'out of stock'} onChange={checked => updateVariation(v.key, 'availability', checked ? 'in stock' : 'out of stock')} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <VariantBuilder attributes={attributes} colors={colors} images={imagePreviews.map((src, i) => ({ ref: `new:${i}`, src }))} rows={variations} onChange={setVariations} />
       </SectionCard>
 
       {/* Purchase */}

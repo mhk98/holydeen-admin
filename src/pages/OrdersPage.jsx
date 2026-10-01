@@ -1964,7 +1964,7 @@ function getInvoiceItems(order, meta) {
       const total = Number(item.total || item.lineTotal || unitPrice * qty);
       return {
         id: item.id || item.productId || index,
-        name: item.name || item.productName || "Product",
+        name: `${item.name || item.productName || "Product"}${item.variant ? ` (${item.variant})` : ""}`,
         qty,
         unitPrice: unitPrice || Math.round(total / qty),
         total,

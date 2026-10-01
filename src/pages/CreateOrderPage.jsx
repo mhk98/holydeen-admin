@@ -21,6 +21,7 @@ import {
 } from "../hooks/useProducts";
 import { orderService } from "../services/orderService";
 import { imageUrl } from "../utils/assetUrl";
+import { sellableUnits, toOrderItem } from "../utils/variants";
 
 // ── Delivery areas ─────────────────────────────────────────
 const deliveryAreas = [
@@ -149,24 +150,21 @@ export default function CreateOrderPage({ onNavigate }) {
     checkout.submitting.current = true;
     setSubmitting(true);
     try {
-      const productName = cart.map((i) => `${i.name} x${i.qty}`).join(", ");
-      const productImage = cart[0]?.images?.[0] || null;
-      const quantity = cart.reduce((sum, i) => sum + i.qty, 0);
-
       const payload = {
         checkoutKey: checkout.getKey(isGuest ? "Guest" : phone.trim()),
         customerName: isGuest ? "Guest" : customerName.trim() || "Guest",
         customerPhone: isGuest ? "Guest" : phone.trim(),
-        customerArea: address.trim() || null,
-        productName,
-        productImage,
-        quantity,
-        totalBill: total,
+        customerAddress: address.trim(),
+        customerDistrict: deliveryAreas[areaIdx].label,
+        items: cart.map(toOrderItem),
+        deliveryCharge: shippingFee,
+        discount: discountAmt,
         advance: paidAmt || 0,
+        orderSource: "Manual",
         orderDate: new Date().toISOString().slice(0, 10),
       };
 
-      await orderService.createOrder(payload);
+      await orderService.createStaffOrder(payload);
       checkout.complete();
       alert("Order সফলভাবে তৈরি হয়েছে!");
       clearCart();
@@ -213,24 +211,15 @@ export default function CreateOrderPage({ onNavigate }) {
 
   // ── Product list ──────────────────────────────────────────
   const filteredProducts = useMemo(() => {
-    const mapped = rawProducts.map((p) => {
+    const mapped = rawProducts.flatMap((p) => {
       const images = parseImages(p.images).map(imageValue).filter(Boolean);
-      return {
-        id: p.Id,
-        name: p.name,
-        brand: p.brand?.name || p.brandName || "",
-        price: Number(
-          p.variations?.[0]?.newPrice || p.variations?.[0]?.price || 0,
-        ),
-        stock:
-          p.variations?.reduce((sum, v) => sum + (Number(v.stock) || 0), 0) ??
-          0,
-        sku: p.sku || p.variations?.[0]?.sku || "",
+      const category = {
         categoryId: toId(p.categoryId || p.category?.Id),
         subcategoryId: toId(p.subcategoryId || p.subcategory?.Id),
         childcategoryId: toId(p.childcategoryId || p.childcategory?.Id),
-        images,
+        brand: p.brand?.name || p.brandName || "",
       };
+      return sellableUnits(p, images).map((unit) => ({ ...unit, ...category }));
     });
     const q = search.trim().toLowerCase();
     return mapped.filter((product) => {

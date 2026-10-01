@@ -21,6 +21,7 @@ import {
   useSubcategories,
 } from "../hooks/useProducts";
 import { orderService } from "../services/orderService";
+import { cartLinesFromOrder, sellableUnits, toOrderItem } from "../utils/variants";
 import { orderStatusService } from "../services/websiteService";
 import { normalizeOrderStatuses } from "../utils/orderStatuses";
 import { imageUrl } from "../utils/assetUrl";
@@ -118,19 +119,9 @@ export default function EditOrderPage({
   const [orderStatusOptions, setOrderStatusOptions] = useState(() =>
     normalizeOrderStatuses(),
   );
-  // Pre-fill cart from order (API fields: productName, totalBill, quantity)
-  const [cart, setCart] = useState([
-    {
-      id: order.Id,
-      name: order.productName || "",
-      price: Number(order.totalBill) || 0,
-      qty: order.quantity || 1,
-      disc: 0,
-      sku: "",
-      brand: "",
-      images: order.productImage ? [order.productImage] : [],
-    },
-  ]);
+  // Pre-fill cart from the stored order lines (legacy orders become a single line).
+  const [initialOrder] = useState(() => cartLinesFromOrder(order));
+  const [cart, setCart] = useState(initialOrder.lines);
 
   const [phone, setPhone] = useState(order.customerPhone || "");
   const [customerName, setCustomerName] = useState(order.customerName || "");
@@ -148,7 +139,11 @@ export default function EditOrderPage({
       .join(", "),
   );
   const [areaIdx, setAreaIdx] = useState(Math.max(0, savedAreaIdx));
-  const [discount, setDiscount] = useState("");
+  // Keep the order's current delivery charge until staff pick an area.
+  const [shippingFee, setShippingFee] = useState(() =>
+    initialOrder.legacy ? 0 : initialOrder.deliveryCharge,
+  );
+  const [discount, setDiscount] = useState(initialOrder.discount ? String(initialOrder.discount) : "");
   const [advanced, setAdvanced] = useState(String(order.advance || 0));
   const [orderStatus, setOrderStatus] = useState(order.status || "pending");
   const [isGuest, setIsGuest] = useState(false);
@@ -214,7 +209,6 @@ export default function EditOrderPage({
 
   // Calculations
   const subTotal = cart.reduce((sum, i) => sum + i.price * i.qty - i.disc, 0);
-  const shippingFee = deliveryAreas[areaIdx].fee;
   const discountAmt = Number(discount) || 0;
   const paidAmt = Number(advanced) || 0;
   const total = subTotal + shippingFee - discountAmt;
@@ -246,24 +240,15 @@ export default function EditOrderPage({
 
   // Product filter from API
   const filteredProducts = useMemo(() => {
-    const mapped = rawProducts.map((p) => {
+    const mapped = rawProducts.flatMap((p) => {
       const images = parseImages(p.images).map(imageValue).filter(Boolean);
-      return {
-        id: p.Id,
-        name: p.name,
-        brand: p.brand?.name || p.brandName || "",
-        price: Number(
-          p.variations?.[0]?.newPrice || p.variations?.[0]?.price || 0,
-        ),
-        stock:
-          p.variations?.reduce((sum, v) => sum + (Number(v.stock) || 0), 0) ??
-          0,
-        sku: p.sku || p.variations?.[0]?.sku || "",
+      const category = {
         categoryId: toId(p.categoryId || p.category?.Id),
         subcategoryId: toId(p.subcategoryId || p.subcategory?.Id),
         childcategoryId: toId(p.childcategoryId || p.childcategory?.Id),
-        images,
+        brand: p.brand?.name || p.brandName || "",
       };
+      return sellableUnits(p, images).map((unit) => ({ ...unit, ...category }));
     });
     const q = search.trim().toLowerCase();
     return mapped.filter((product) => {
@@ -289,17 +274,13 @@ export default function EditOrderPage({
     }
     setSubmitting(true);
     try {
-      const productName = cart.map((i) => `${i.name} x${i.qty}`).join(", ");
-      const productImage = cart[0]?.images?.[0] || null;
-      const quantity = cart.reduce((sum, i) => sum + i.qty, 0);
       const payload = {
         customerName: isGuest ? "Guest" : customerName.trim() || "Guest",
         customerPhone: isGuest ? "Guest" : phone.trim(),
         customerArea: address.trim() || null,
-        productName,
-        productImage,
-        quantity,
-        totalBill: total,
+        items: cart.map(toOrderItem),
+        deliveryCharge: shippingFee,
+        discount: discountAmt,
         advance: paidAmt || 0,
         status: orderStatus,
       };
@@ -469,7 +450,11 @@ export default function EditOrderPage({
             <div className="relative">
               <select
                 value={areaIdx}
-                onChange={(e) => setAreaIdx(Number(e.target.value))}
+                onChange={(e) => {
+                  const idx = Number(e.target.value);
+                  setAreaIdx(idx);
+                  setShippingFee(deliveryAreas[idx].fee);
+                }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 appearance-none pr-8"
               >
                 {deliveryAreas.map((a, i) => (
@@ -488,8 +473,8 @@ export default function EditOrderPage({
             <input
               type="number"
               value={shippingFee}
-              readOnly
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50"
+              onChange={(e) => setShippingFee(Number(e.target.value) || 0)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300"
               placeholder="Shipping Fee"
             />
 
