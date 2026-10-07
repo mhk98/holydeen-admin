@@ -13,7 +13,7 @@ import { landingPageService } from "../../services/landingPageService";
 
 const PAGE_SIZES = [10, 20, 30, 50];
 const FRONTEND_SITE_URL = (
-  import.meta.env.VITE_SITE_URL || "https://holydeen.com"
+  import.meta.env.VITE_SITE_URL || "http://localhost:3000"
 ).replace(/\/+$/, "");
 
 function getFrontendLandingUrl(id) {
