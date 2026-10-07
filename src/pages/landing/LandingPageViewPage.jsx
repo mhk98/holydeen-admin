@@ -27,13 +27,18 @@ import {
 } from "../../services/websiteService";
 import { imageUrl } from "../../utils/assetUrl";
 
-// Same rules as the storefront landing page and the order API (regularData.deliveryInside/Outside).
-function getShippingOptions(campaign) {
+// Same rules as the storefront landing page and the order API (regularData.deliveryInside/Outside):
+// at least 80/130, and free when every selected product ships free.
+function getShippingOptions(campaign, freeShipping = false) {
   const regularData = parseObject(campaign?.regularData);
   return [
-    { id: "inside", label: "Inside Dhaka", banglaLabel: "ঢাকার ভিতরে", charge: toNumber(regularData.deliveryInside, 70) },
-    { id: "outside", label: "Outside Dhaka", banglaLabel: "ঢাকার বাইরে", charge: toNumber(regularData.deliveryOutside, 130) },
-  ];
+    { id: "inside", label: "Inside Dhaka", banglaLabel: "ঢাকার ভিতরে", charge: Math.max(toNumber(regularData.deliveryInside, 0), 80) },
+    { id: "outside", label: "Outside Dhaka", banglaLabel: "ঢাকার বাইরে", charge: Math.max(toNumber(regularData.deliveryOutside, 0), 130) },
+  ].map((option) =>
+    freeShipping
+      ? { ...option, label: `${option.label} (Free Delivery)`, charge: 0, free: true }
+      : option,
+  );
 }
 
 const DEVICE_ID_KEY = "holydeen_device_id";
@@ -199,14 +204,22 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
   const bannerImage = campaign?.bannerImageUrl || heroImage;
   const prizeImageSource = campaign?.prizeImageUrl || "";
   const reviewImages = parseImages(campaign?.reviewImages);
+  // The public landing API sends free-shipping product ids; the admin preview loads them separately.
+  const [fetchedFreeShippingIds, setFetchedFreeShippingIds] = useState(null);
+  const freeShippingIds = campaign?.freeShippingProductIds ?? fetchedFreeShippingIds;
   const productOptions = useMemo(
-    () => getLandingProductOptions(campaign, { productName, price, originalPrice, bannerImage }),
-    [campaign, productName, price, originalPrice, bannerImage],
+    () => getLandingProductOptions(campaign, { productName, price, originalPrice, bannerImage }, freeShippingIds),
+    [campaign, productName, price, originalPrice, bannerImage, freeShippingIds],
   );
   const [selectedProducts, setSelectedProducts] = useState(() =>
     initializeSelectedProducts(productOptions),
   );
-  const shippingOptions = useMemo(() => getShippingOptions(campaign), [campaign]);
+  const allFreeShipping =
+    selectedProducts.length > 0 && selectedProducts.every((item) => item.freeShipping);
+  const shippingOptions = useMemo(
+    () => getShippingOptions(campaign, allFreeShipping),
+    [campaign, allFreeShipping],
+  );
   const deliveryCharge =
     shippingOptions.find((option) => option.id === form.shipping)?.charge || 0;
   const productSubtotal = selectedProducts.reduce(
@@ -218,6 +231,20 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
   useEffect(() => {
     setSelectedProducts(initializeSelectedProducts(productOptions));
   }, [productOptions]);
+
+  useEffect(() => {
+    if (!campaign?.Id || Array.isArray(campaign.freeShippingProductIds)) return undefined;
+    let active = true;
+    landingPageService
+      .getPublicOne(campaign.Id)
+      .then((res) => {
+        if (active) setFetchedFreeShippingIds(res.data?.freeShippingProductIds || []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [campaign?.Id, campaign?.freeShippingProductIds]);
 
   useEffect(() => {
     let active = true;
@@ -1434,7 +1461,7 @@ function RegularLandingTemplate({ data, campaign }) {
                     className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm last:border-b-0"
                   >
                     <span className={`h-5 w-5 rounded-full border ${form.shipping === option.id ? "border-green-600 bg-green-600" : "border-slate-300"}`} />
-                    {`${option.banglaLabel} ${option.charge} টাকা`}
+                    {`${option.banglaLabel} ${option.free ? "ফ্রি ডেলিভারি" : `${option.charge} টাকা`}`}
                   </button>
                 ))}
               </div>
@@ -3236,8 +3263,12 @@ function getProductName(campaign) {
   );
 }
 
-function getLandingProductOptions(campaign, fallback) {
+function getLandingProductOptions(campaign, fallback, freeShippingIds) {
   const regularData = parseObject(campaign?.regularData);
+  // Same linked product the order API checks for free shipping.
+  const freeIds = new Set((freeShippingIds || []).map(Number));
+  const isFreeShipping = (linkedId) =>
+    freeIds.has(Number(linkedId || campaign?.productId || 0));
   const configured = Array.isArray(regularData.productOptions)
     ? regularData.productOptions
     : [];
@@ -3249,6 +3280,7 @@ function getLandingProductOptions(campaign, fallback) {
       price: toNumber(item.price, fallback.price),
       originalPrice: toNumber(item.originalPrice, fallback.originalPrice),
       image: imageUrl(item.image) || fallback.bannerImage || heroImage,
+      freeShipping: isFreeShipping(item.productId),
     }))
     .filter((item) => item.id && item.name && item.price > 0);
 
@@ -3262,6 +3294,7 @@ function getLandingProductOptions(campaign, fallback) {
       price: fallback.price,
       originalPrice: fallback.originalPrice,
       image: fallback.bannerImage || heroImage,
+      freeShipping: isFreeShipping(campaign?.productId),
     },
   ];
 }

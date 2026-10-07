@@ -724,10 +724,11 @@ export default function LandingPageCreatePage({ mode = 'create', campaign, onNav
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Inside Dhaka Delivery Charge
+                Inside Dhaka Delivery Charge (min 80)
               </label>
               <input
                 type="number"
+                min={80}
                 value={form.deliveryInside}
                 onChange={(e) => set('deliveryInside', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
@@ -735,10 +736,11 @@ export default function LandingPageCreatePage({ mode = 'create', campaign, onNav
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Outside Dhaka Delivery Charge
+                Outside Dhaka Delivery Charge (min 130)
               </label>
               <input
                 type="number"
+                min={130}
                 value={form.deliveryOutside}
                 onChange={(e) => set('deliveryOutside', e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
@@ -1358,7 +1360,7 @@ function buildFormState(campaign) {
     ctaText: regularData.ctaText || 'অর্ডার করতে ক্লিক করুন',
     orderTitle: regularData.orderTitle || 'অর্ডার করতে আপনার সঠিক তথ্য দিয়ে নিচের ফর্মটি সম্পূর্ণ পূরণ করুন।',
     sizeTitle: regularData.sizeTitle || '',
-    deliveryInside: regularData.deliveryInside || '70',
+    deliveryInside: regularData.deliveryInside || '80',
     deliveryOutside: regularData.deliveryOutside || '130',
     countdownStart: countdownRange.start,
     countdownEnd: countdownRange.end,
