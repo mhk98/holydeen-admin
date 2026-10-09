@@ -189,7 +189,7 @@ export default function InvoicePage({
               <img
                 src={logo}
                 alt={sellerName}
-                className="h-40 w-40 rounded-full object-cover"
+                className="h-32 w-auto max-w-[200px] object-contain"
                 onError={(event) => {
                   event.currentTarget.style.display = "none";
                 }}
