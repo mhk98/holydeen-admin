@@ -41,7 +41,7 @@ export default function LoginPage() {
             <ShoppingBag size={40} className="text-white" />
           </div>
           <h1 className="text-4xl font-bold text-white mb-3">
-            Holy DeenDashboard
+            Holy Deen Dashboard
           </h1>
           <p className="text-blue-100 text-lg mb-10">
             Complete E-Commerce Management System
@@ -76,7 +76,7 @@ export default function LoginPage() {
               <ShoppingBag size={20} className="text-white" />
             </div>
             <span className="text-xl font-bold text-slate-800">
-              Holy DeenDashboard
+              Holy Deen Dashboard
             </span>
           </div>
 
@@ -107,7 +107,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
                   autoComplete="email"
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 text-sm transition placeholder-gray-400"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 text-sm transition placeholder-gray-400"
                 />
               </div>
 

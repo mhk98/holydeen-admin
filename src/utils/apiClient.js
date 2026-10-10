@@ -64,6 +64,12 @@ export function isTokenExpired(token) {
   return Date.now() >= decoded.exp * 1000;
 }
 
+// Empty or non-JSON bodies (proxy/gateway hiccups) must not surface as
+// "Unexpected end of JSON input".
+async function readJson(res) {
+  return res.json().catch(() => ({ message: res.statusText || "Request failed" }));
+}
+
 // Refresh the access token using the stored refresh token
 async function doRefresh() {
   const refreshToken = getRefreshToken();
@@ -85,7 +91,8 @@ async function doRefresh() {
     throw new Error("Session expired. Please login again.");
   }
 
-  const json = await res.json();
+  const json = await readJson(res);
+  if (!json.data?.accessToken) throw new Error("Could not refresh session. Please try again.");
   const newAccess = json.data?.accessToken;
   const newRefresh = json.data?.refreshToken;
   setTokens(newAccess, newRefresh);
@@ -172,10 +179,10 @@ export async function apiRequest(path, options = {}) {
         retryNetworkErrors,
       );
       if (!retryRes.ok) {
-        const err = await retryRes.json();
+        const err = await readJson(retryRes);
         throw new Error(err.message || "Request failed");
       }
-      return retryRes.json();
+      return readJson(retryRes);
     } catch {
       clearTokens();
       window.dispatchEvent(new Event("auth:logout"));
@@ -183,9 +190,7 @@ export async function apiRequest(path, options = {}) {
     }
   }
 
-  const json = await res
-    .json()
-    .catch(() => ({ message: res.statusText || "Request failed" }));
+  const json = await readJson(res);
   if (!res.ok) throw new Error(json.message || "Request failed");
   return json;
 }
