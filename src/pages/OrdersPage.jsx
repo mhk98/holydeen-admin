@@ -169,6 +169,7 @@ export default function OrdersPage({
   const [bulkCourierBusy, setBulkCourierBusy] = useState(false);
   const [barcodePrintOrders, setBarcodePrintOrders] = useState([]);
   const [invoicePrintOrders, setInvoicePrintOrders] = useState([]);
+  const [stickerPrintOrders, setStickerPrintOrders] = useState([]);
   const [assignees, setAssignees] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
@@ -275,6 +276,19 @@ export default function OrdersPage({
       window.removeEventListener("afterprint", handleAfterPrint);
     };
   }, [invoicePrintOrders.length]);
+
+  useEffect(() => {
+    if (!stickerPrintOrders.length) return undefined;
+
+    const handleAfterPrint = () => setStickerPrintOrders([]);
+    window.addEventListener("afterprint", handleAfterPrint);
+    const timer = window.setTimeout(() => window.print(), 100);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, [stickerPrintOrders.length]);
 
   function handleSearch() {
     setAppliedSearch(search);
@@ -395,6 +409,35 @@ export default function OrdersPage({
     }
   }
 
+  // Sticker needs the consignment ID, so it is offered only after a successful
+  // courier send. Uses the pre-send order objects since the refetched list
+  // (e.g. Confirmed tab) no longer contains them.
+  function offerStickerPrint(message, provider, rows, sourceOrders) {
+    const ordersById = new Map(
+      sourceOrders.map((order) => [Number(order.Id), order]),
+    );
+    const printable = rows
+      .filter((row) => row && !row.alreadySent)
+      .filter((row) => row.consignmentId || row.trackingCode)
+      .map((row) => {
+        const order = ordersById.get(Number(row.orderId));
+        return order && withCourierInfo(order, provider, row);
+      })
+      .filter(Boolean);
+
+    if (!printable.length) {
+      alert(message);
+      return;
+    }
+    if (
+      window.confirm(
+        `${message}\n\n${printable.length} টি order এর sticker এখনই print করবেন?`,
+      )
+    ) {
+      setStickerPrintOrders(printable);
+    }
+  }
+
   async function handleSendToSteadfast(order) {
     if (
       !window.confirm(
@@ -404,10 +447,10 @@ export default function OrdersPage({
       return;
     setCourierBusyId(order.Id);
     try {
-      await orderService.sendToSteadfast(order.Id);
+      const res = await orderService.sendToSteadfast(order.Id);
       await refetch();
       onCountsRefresh?.();
-      alert("Steadfast courier এ order পাঠানো হয়েছে।");
+      offerStickerPrint("Steadfast courier এ order পাঠানো হয়েছে।", "steadfast", [res?.data], [order]);
     } catch (err) {
       alert(err.message || "Steadfast courier এ পাঠানো যায়নি");
     } finally {
@@ -422,10 +465,10 @@ export default function OrdersPage({
       return;
     setCourierBusyId(order.Id);
     try {
-      await orderService.sendToPathao(order.Id);
+      const res = await orderService.sendToPathao(order.Id);
       await refetch();
       onCountsRefresh?.();
-      alert("Pathao courier এ order পাঠানো হয়েছে।");
+      offerStickerPrint("Pathao courier এ order পাঠানো হয়েছে।", "pathao", [res?.data], [order]);
     } catch (err) {
       alert(err.message || "Pathao courier এ পাঠানো যায়নি");
     } finally {
@@ -490,6 +533,7 @@ export default function OrdersPage({
     )
       return;
     setBulkCourierBusy(true);
+    const sourceOrders = orders;
     try {
       const res = await orderService.bulkSendToSteadfast(confirmedIds);
       const data = res.data || {};
@@ -498,8 +542,11 @@ export default function OrdersPage({
       setSelectedOrderIds([]);
       await refetch();
       onCountsRefresh?.();
-      alert(
+      offerStickerPrint(
         `Steadfast bulk send complete. Sent: ${sent}, Skipped/Error: ${skipped}`,
+        "steadfast",
+        data.sent || [],
+        sourceOrders,
       );
     } catch (err) {
       alert(err.message || "Bulk send to Steadfast failed");
@@ -524,6 +571,7 @@ export default function OrdersPage({
     )
       return;
     setBulkCourierBusy(true);
+    const sourceOrders = orders;
     try {
       const res = await orderService.bulkSendToPathao(confirmedIds);
       const data = res.data || {};
@@ -532,8 +580,11 @@ export default function OrdersPage({
       setSelectedOrderIds([]);
       await refetch();
       onCountsRefresh?.();
-      alert(
+      offerStickerPrint(
         `Pathao bulk send complete. Sent: ${sent}, Skipped/Error: ${skipped}`,
+        "pathao",
+        data.sent || [],
+        sourceOrders,
       );
     } catch (err) {
       alert(err.message || "Bulk send to Pathao failed");
@@ -566,6 +617,36 @@ export default function OrdersPage({
     }
 
     setInvoicePrintOrders(selectedOrders);
+  }
+
+  function handlePrintSelectedStickers() {
+    const selectedOrders = selectedOrderIds
+      .map((id) => orders.find((order) => Number(order.Id) === Number(id)))
+      .filter(Boolean);
+
+    if (!selectedOrders.length) {
+      alert("Sticker print করার জন্য আগে order select করুন");
+      return;
+    }
+
+    const readyOrders = selectedOrders.filter(getCourierLabelInfo);
+    const pendingCount = selectedOrders.length - readyOrders.length;
+
+    if (!readyOrders.length) {
+      alert(
+        "Selected order গুলো এখনো Steadfast/Pathao তে পাঠানো হয়নি। আগে courier এ পাঠান — Consignment ID ছাড়া sticker print হবে না।",
+      );
+      return;
+    }
+    if (
+      pendingCount > 0 &&
+      !window.confirm(
+        `${pendingCount} টি order এখনো courier এ পাঠানো হয়নি, সেগুলো বাদ দিয়ে ${readyOrders.length} টি sticker print হবে। চালিয়ে যাবেন?`,
+      )
+    )
+      return;
+
+    setStickerPrintOrders(readyOrders);
   }
 
   async function handleAssignSelectedOrders() {
@@ -1041,6 +1122,14 @@ export default function OrdersPage({
               <Printer size={14} />
               Print Invoice
             </button>
+            <button
+              type="button"
+              onClick={handlePrintSelectedStickers}
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-700"
+            >
+              <Printer size={14} />
+              Print Sticker
+            </button>
           </div>
           {canAssignOrders && (
             <div className="border-t border-gray-100 px-4 pb-4 pt-3">
@@ -1124,6 +1213,13 @@ export default function OrdersPage({
       {invoicePrintOrders.length > 0 && (
         <OrderInvoicePrintSheet
           orders={invoicePrintOrders}
+          siteSettings={siteSettings}
+        />
+      )}
+
+      {stickerPrintOrders.length > 0 && (
+        <OrderStickerPrintSheet
+          orders={stickerPrintOrders}
           siteSettings={siteSettings}
         />
       )}
@@ -1342,6 +1438,446 @@ function OrderBarcodeLabel({ order }) {
       </div>
     </div>
   );
+}
+
+// 3in x 2in (75mm x 50mm) courier sticker, one per page for label printers.
+// Only orders that already have a Steadfast/Pathao consignment are printable.
+function OrderStickerPrintSheet({ orders, siteSettings }) {
+  const settings = normalizeSettingData(siteSettings);
+
+  return (
+    <div className="order-sticker-print-area">
+      <div className="order-sticker-print-toolbar">
+        <button type="button" onClick={() => window.print()}>
+          Print
+        </button>
+      </div>
+
+      <div className="order-sticker-print-sheet">
+        {orders.map((order) => (
+          <OrderSticker key={order.Id} order={order} settings={settings} />
+        ))}
+      </div>
+
+      <style>{`
+        .order-sticker-print-area {
+          display: none;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+
+        .order-sticker-print-toolbar {
+          padding: 12px;
+          text-align: center;
+        }
+
+        .order-sticker-print-toolbar button {
+          border: 1px solid #111827;
+          border-radius: 4px;
+          background: #ffffff;
+          padding: 4px 14px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .order-sticker {
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          width: 75mm;
+          height: 50mm;
+          padding: 1.8mm 2.2mm;
+          overflow: hidden;
+          background: #ffffff;
+          color: #000000;
+          font-family: Arial, Helvetica, sans-serif;
+          break-after: page;
+          page-break-after: always;
+        }
+
+        .order-sticker:last-child {
+          break-after: auto;
+          page-break-after: auto;
+        }
+
+        .order-sticker p {
+          margin: 0;
+        }
+
+        .order-sticker__head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 2mm;
+          border-bottom: 0.35mm solid #000000;
+          padding-bottom: 0.7mm;
+        }
+
+        .order-sticker__courier {
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.4px;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        .order-sticker__merchant {
+          min-width: 0;
+          text-align: right;
+        }
+
+        .order-sticker__merchant-name {
+          font-size: 7.5px;
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .order-sticker__merchant-phone {
+          font-size: 6.5px;
+          white-space: nowrap;
+        }
+
+        .order-sticker__barcode-wrap {
+          margin-top: 0.8mm;
+          text-align: center;
+        }
+
+        .order-sticker__barcode {
+          width: 100%;
+          height: 9.5mm;
+        }
+
+        .order-sticker__barcode svg {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+
+        .order-sticker__consignment {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+        }
+
+        .order-sticker__tracking {
+          font-size: 6.5px;
+          font-weight: 700;
+        }
+
+        .order-sticker__body {
+          display: flex;
+          align-items: stretch;
+          gap: 1.5mm;
+          margin-top: 0.8mm;
+          border-top: 0.2mm dashed #000000;
+          padding-top: 0.8mm;
+          min-height: 0;
+          flex: 1;
+        }
+
+        .order-sticker__to {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .order-sticker__name {
+          font-size: 8.5px;
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .order-sticker__phone {
+          font-size: 9.5px;
+          font-weight: 800;
+        }
+
+        .order-sticker__address {
+          font-size: 7px;
+          line-height: 1.2;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .order-sticker__cod {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          width: 19mm;
+          border: 0.4mm solid #000000;
+          border-radius: 1mm;
+          text-align: center;
+        }
+
+        .order-sticker__cod-label {
+          font-size: 6.5px;
+          font-weight: 700;
+        }
+
+        .order-sticker__cod-value {
+          font-size: 11.5px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .order-sticker__foot {
+          margin-top: 0.6mm;
+          border-top: 0.2mm solid #000000;
+          padding-top: 0.4mm;
+          font-size: 6.5px;
+        }
+
+        .order-sticker__meta {
+          display: flex;
+          justify-content: space-between;
+          gap: 1.5mm;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .order-sticker__items {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        @media print {
+          @page {
+            size: 75mm 50mm;
+            margin: 0;
+          }
+
+          html,
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body * {
+            visibility: hidden !important;
+          }
+
+          .order-sticker-print-area,
+          .order-sticker-print-area * {
+            visibility: visible !important;
+          }
+
+          .order-sticker-print-area {
+            display: block !important;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 75mm;
+            background: #ffffff;
+          }
+
+          .order-sticker-print-toolbar {
+            display: none !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function OrderSticker({ order, settings }) {
+  const courier = getCourierLabelInfo(order) || {
+    name: order.courier || "",
+    consignmentId: "",
+    trackingCode: "",
+  };
+  const meta = getOrderNoteMeta(order);
+  const items = getInvoiceItems(order, meta);
+  const totalQty = items.reduce((sum, item) => sum + item.qty, 0);
+  const invoiceNo = getInvoiceNumber(order);
+  const modules = buildCode128Modules(courier.consignmentId);
+  const subtotal =
+    Number(order.subtotal ?? meta.subtotal) ||
+    items.reduce((sum, item) => sum + item.total, 0);
+  const shipping = Number(order.deliveryCharge ?? meta.deliveryCharge ?? 0);
+  const discount = Number(meta.discount || order.discount || 0);
+  const finalTotal =
+    Number(order.totalBill || order.total || meta.total) ||
+    Math.max(0, subtotal + shipping - discount);
+  const paid = Number(
+    order.advance || order.paid || meta.advance || meta.paid || 0,
+  );
+  const due = Math.max(0, finalTotal - paid);
+  const sellerName =
+    getSiteName(settings) || settings.companyName || "Holy Deen";
+  const sellerPhone = settings.phone || settings.phoneNumber || "+880 1354-427155";
+  const customerAddress =
+    order.customerAddress ||
+    meta.customerAddress ||
+    [order.customerArea, order.customerDistrict].filter(Boolean).join(", ");
+  const itemSummary = items
+    .map((item) => `${item.name} x${item.qty}`)
+    .join(", ");
+
+  return (
+    <div className="order-sticker">
+      <div className="order-sticker__head">
+        <p className="order-sticker__courier">{courier.name}</p>
+        <div className="order-sticker__merchant">
+          <p className="order-sticker__merchant-name">{sellerName}</p>
+          <p className="order-sticker__merchant-phone">{sellerPhone}</p>
+        </div>
+      </div>
+
+      <div className="order-sticker__barcode-wrap">
+        {modules.length > 0 && (
+          <div className="order-sticker__barcode">
+            <svg
+              viewBox={`0 0 ${modules.length} 40`}
+              preserveAspectRatio="none"
+              shapeRendering="crispEdges"
+              aria-label={`Barcode ${courier.consignmentId}`}
+            >
+              <rect width={modules.length} height="40" fill="#ffffff" />
+              {modules.map((black, index) =>
+                black ? (
+                  <rect
+                    key={index}
+                    x={index}
+                    y="0"
+                    width="1"
+                    height="40"
+                    fill="#000000"
+                  />
+                ) : null,
+              )}
+            </svg>
+          </div>
+        )}
+        <p className="order-sticker__consignment">
+          CID: {courier.consignmentId || "—"}
+        </p>
+        {courier.trackingCode && (
+          <p className="order-sticker__tracking">
+            Tracking: {courier.trackingCode}
+          </p>
+        )}
+      </div>
+
+      <div className="order-sticker__body">
+        <div className="order-sticker__to">
+          <p className="order-sticker__name">
+            To: {order.customerName || "Customer"}
+          </p>
+          <p className="order-sticker__phone">{order.customerPhone || "N/A"}</p>
+          <p className="order-sticker__address">{customerAddress || "N/A"}</p>
+        </div>
+        <div className="order-sticker__cod">
+          <p className="order-sticker__cod-label">{due > 0 ? "COD" : "PAID"}</p>
+          <p className="order-sticker__cod-value">{invoiceMoney(due)}</p>
+        </div>
+      </div>
+
+      <div className="order-sticker__foot">
+        <div className="order-sticker__meta">
+          <span>Inv: {invoiceNo}</span>
+          <span>Qty: {totalQty}</span>
+          <span>{formatInvoiceDate(order.orderDate || order.createdAt)}</span>
+        </div>
+        {itemSummary && (
+          <p className="order-sticker__items">{itemSummary}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Returns the courier name + IDs printed on the sticker, or null when the
+// order has not been sent to a courier yet (no consignment to label).
+function getCourierLabelInfo(order) {
+  if (!order) return null;
+  const steadfastInfo = getSteadfastInfo(order);
+  const pathaoInfo = getPathaoInfo(order);
+  const steadfastId = steadfastInfo.consignmentId || steadfastInfo.trackingCode;
+  const pathaoId = pathaoInfo.consignmentId || pathaoInfo.trackingCode;
+  const courierKey = String(order.courier || "").toLowerCase();
+
+  if (pathaoId && (courierKey.includes("pathao") || !steadfastId)) {
+    return { name: "Pathao", consignmentId: String(pathaoId), trackingCode: "" };
+  }
+  if (steadfastId) {
+    return {
+      name: "Steadfast",
+      consignmentId: String(steadfastId),
+      trackingCode:
+        steadfastInfo.consignmentId && steadfastInfo.trackingCode
+          ? String(steadfastInfo.trackingCode)
+          : "",
+    };
+  }
+  return null;
+}
+
+// Mirrors the backend's mergeCourierMeta so a just-sent order can be printed
+// before the list is refetched.
+function withCourierInfo(order, provider, row) {
+  const meta = getOrderNoteMeta(order);
+  return {
+    ...order,
+    courier: provider === "pathao" ? "Pathao" : "Steadfast",
+    note: JSON.stringify({
+      ...meta,
+      courierIntegration: {
+        ...(meta.courierIntegration || {}),
+        [provider]: {
+          ...(meta.courierIntegration?.[provider] || {}),
+          consignmentId: row.consignmentId || null,
+          trackingCode: row.trackingCode || null,
+        },
+      },
+    }),
+  };
+}
+
+const CODE128_PATTERNS = [
+  "212222", "222122", "222221", "121223", "121322", "131222", "122213",
+  "122312", "132212", "221213", "221312", "231212", "112232", "122132",
+  "122231", "113222", "123122", "123221", "223211", "221132", "221231",
+  "213212", "223112", "312131", "311222", "321122", "321221", "312212",
+  "322112", "322211", "212123", "212321", "232121", "111323", "131123",
+  "131321", "112313", "132113", "132311", "211313", "231113", "231311",
+  "112133", "112331", "132131", "113123", "113321", "133121", "313121",
+  "211331", "231131", "213113", "213311", "213131", "311123", "311321",
+  "331121", "312113", "312311", "332111", "314111", "221411", "431111",
+  "111224", "111422", "121124", "121421", "141122", "141221", "112214",
+  "112412", "122114", "122411", "142112", "142211", "241211", "221114",
+  "413111", "241112", "134111", "111242", "121142", "121241", "114212",
+  "124112", "124211", "411212", "421112", "421211", "212141", "214121",
+  "412121", "111143", "111341", "131141", "114113", "114311", "411113",
+  "411311", "113141", "114131", "311141", "411131", "211412", "211214",
+  "211232", "2331112",
+];
+
+// Code 128-B so courier hub scanners can read the consignment ID.
+// Returns one boolean per module (true = black), including quiet zones.
+function buildCode128Modules(value) {
+  const text = String(value || "").replace(/[^\x20-\x7e]/g, "");
+  if (!text) return [];
+
+  const codes = [104, ...text.split("").map((char) => char.charCodeAt(0) - 32)];
+  const checksum =
+    codes.reduce((sum, code, index) => sum + code * (index || 1), 0) % 103;
+  const pattern = [...codes, checksum, 106]
+    .map((code) => CODE128_PATTERNS[code])
+    .join("");
+
+  const modules = new Array(10).fill(false);
+  pattern.split("").forEach((width, index) => {
+    for (let i = 0; i < Number(width); i += 1) modules.push(index % 2 === 0);
+  });
+  return modules.concat(new Array(10).fill(false));
 }
 
 function formatBarcodePrintedAt(date) {

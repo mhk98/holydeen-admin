@@ -167,6 +167,9 @@ export function AuthProvider({ children }) {
     if (!user) return undefined;
 
     const keepAlive = () => {
+      // A hidden tab must not keep pinging (and keep the API awake) all day;
+      // the focus/visibility listeners below ping again on return.
+      if (document.visibilityState !== "visible") return;
       if (!getAccessToken()) return;
       pingApi().catch(() => {
         // The next real request will surface the error; this only keeps warm.
