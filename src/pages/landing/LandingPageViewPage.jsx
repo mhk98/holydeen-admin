@@ -547,6 +547,8 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
         customData: {
           ...trackingData,
           order_id: placedOrderData.orderId || placedOrderData.Id,
+          value: placedOrderData.purchaseValue ?? Number(placedOrderData.totalBill ?? total),
+          currency: placedOrderData.purchaseCurrency || "BDT",
         },
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
