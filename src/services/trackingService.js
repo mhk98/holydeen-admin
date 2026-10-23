@@ -62,23 +62,115 @@ function getCookie(name) {
   );
 }
 
+function setCookie(name, value, days = 90) {
+  if (typeof document === "undefined") return;
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax${secure}`;
+}
+
+function getStorage(key) {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(key) || sessionStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setStorage(key, val) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, val);
+    sessionStorage.setItem(key, val);
+  } catch {}
+}
+
+function getOrInitFbc() {
+  if (typeof window === "undefined") return undefined;
+  const params = new URLSearchParams(window.location.search);
+  const fbclid = params.get("fbclid");
+  const cookieFbc = getCookie("_fbc");
+  const storedFbc = getStorage("_fbc");
+
+  if (fbclid) {
+    setStorage("fbclid", fbclid);
+    if (cookieFbc && cookieFbc.endsWith(`.${fbclid}`)) {
+      setStorage("_fbc", cookieFbc);
+      return cookieFbc;
+    }
+    if (storedFbc && storedFbc.endsWith(`.${fbclid}`)) {
+      setCookie("_fbc", storedFbc);
+      return storedFbc;
+    }
+    const newFbc = `fb.1.${Date.now()}.${fbclid}`;
+    setCookie("_fbc", newFbc);
+    setStorage("_fbc", newFbc);
+    return newFbc;
+  }
+
+  if (cookieFbc && /^fb\.1\.\d+\..+$/.test(cookieFbc)) {
+    setStorage("_fbc", cookieFbc);
+    return cookieFbc;
+  }
+
+  if (storedFbc && /^fb\.1\.\d+\..+$/.test(storedFbc)) {
+    setCookie("_fbc", storedFbc);
+    return storedFbc;
+  }
+
+  const storedFbclid = getStorage("fbclid");
+  if (storedFbclid) {
+    const recoveredFbc = `fb.1.${Date.now()}.${storedFbclid}`;
+    setCookie("_fbc", recoveredFbc);
+    setStorage("_fbc", recoveredFbc);
+    return recoveredFbc;
+  }
+
+  return undefined;
+}
+
+function getOrInitFbp() {
+  if (typeof window === "undefined") return undefined;
+  const cookieFbp = getCookie("_fbp");
+  if (cookieFbp && /^fb\.1\.\d+\.\d+$/.test(cookieFbp)) {
+    setStorage("_fbp", cookieFbp);
+    return cookieFbp;
+  }
+
+  const storedFbp = getStorage("_fbp");
+  if (storedFbp && /^fb\.1\.\d+\.\d+$/.test(storedFbp)) {
+    setCookie("_fbp", storedFbp);
+    return storedFbp;
+  }
+
+  const random = Math.floor(1000000000 + Math.random() * 9000000000);
+  const newFbp = `fb.1.${Date.now()}.${random}`;
+  setCookie("_fbp", newFbp);
+  setStorage("_fbp", newFbp);
+  return newFbp;
+}
+
 function getClickData() {
   if (typeof window === "undefined") return {};
   const params = new URLSearchParams(window.location.search);
-  const fbclid = params.get("fbclid");
+  const ttclid = params.get("ttclid");
+  if (ttclid) setStorage("ttclid", ttclid);
   const gclid = params.get("gclid");
+  if (gclid) setStorage("gclid", gclid);
   const gbraid = params.get("gbraid");
+  if (gbraid) setStorage("gbraid", gbraid);
   const wbraid = params.get("wbraid");
+  if (wbraid) setStorage("wbraid", wbraid);
+
   return {
-    fbp: getCookie("_fbp") || undefined,
-    fbc:
-      getCookie("_fbc") ||
-      (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined),
-    ttp: getCookie("_ttp") || undefined,
-    ttclid: params.get("ttclid") || undefined,
-    gclid: gclid || undefined,
-    gbraid: gbraid || undefined,
-    wbraid: wbraid || undefined,
+    fbp: getOrInitFbp(),
+    fbc: getOrInitFbc(),
+    ttp: getCookie("_ttp") || getStorage("_ttp") || undefined,
+    ttclid: ttclid || getStorage("ttclid") || undefined,
+    gclid: gclid || getStorage("gclid") || undefined,
+    gbraid: gbraid || getStorage("gbraid") || undefined,
+    wbraid: wbraid || getStorage("wbraid") || undefined,
   };
 }
 
@@ -270,6 +362,11 @@ export async function trackMarketingEvent(
     trackInBrowser(eventName, eventId, customData);
     if (!server) return eventId;
     const clickData = getClickData();
+    const payloadUserData = {
+      ...clickData,
+      ...userData,
+      country: userData.country || "bd",
+    };
     const response = await apiRequest("/tracking/events", {
       method: "POST",
       body: JSON.stringify({
@@ -277,12 +374,23 @@ export async function trackMarketingEvent(
         eventId,
         eventSourceUrl: window.location.href,
         referrerUrl: document.referrer || undefined,
-        userData: { ...userData, ...clickData },
-        customData,
+        userData: payloadUserData,
+        customData: {
+          ...customData,
+          contents:
+            customData.contents ||
+            (customData.content_ids && customData.content_ids.length > 0
+              ? customData.content_ids.map((id) => ({
+                  id: String(id),
+                  quantity: customData.num_items || 1,
+                  item_price: customData.value ? Number(customData.value) : 0,
+                }))
+              : undefined),
+        },
       }),
     });
     const failures = response?.data?.results?.filter((item) => !item.ok && !item.skipped) || [];
-    if (failures.length) console.warn('Marketing delivery failed', failures.map(({ platform, status }) => ({ platform, status })));
+    if (failures.length) console.warn("Marketing delivery failed", failures.map(({ platform, status }) => ({ platform, status })));
     return failures.length ? null : eventId;
   } catch (error) {
     console.warn(`Marketing event "${eventName}" failed`, error);

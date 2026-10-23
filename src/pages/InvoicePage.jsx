@@ -150,10 +150,11 @@ export default function InvoicePage({
     [order.customerArea, order.customerDistrict].filter(Boolean).join(", ");
   const sellerName =
     getSiteName(settings) || settings.companyName || "Holy Deen";
-  const sellerPhone = settings.phone || settings.phoneNumber || "+880 1354-427155";
+  const sellerPhone =
+    settings.phone || settings.phoneNumber || "+880 1354-427155";
   const sellerEmail = settings.email || "holydeenbd@gmail.com";
   const sellerAddress =
-    settings.address || "House-13, Block-D, Road-1, Mirpur-2, Dhaka";
+    settings.address || "House-13, Road-1, Block-D, Mirpur, Dhaka Bangladesh";
   const logo = getLogo(settings) || "/homzify-logo.jpeg";
   const invoiceNo = invoiceNumber(order);
   const orderDate = order.orderDate || order.createdAt || meta.orderDate;

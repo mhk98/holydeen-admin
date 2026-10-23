@@ -2,35 +2,35 @@ import { useEffect, useState } from 'react';
 import { Image, Plus, Trash2 } from 'lucide-react';
 import { landingPageService } from '../../services/landingPageService';
 
-const DEFAULT_FOOTER = {
-  logoUrl: '',
-  companyName: 'কাফেলা',
-  supportLabel: 'Customer Supports:',
-  supportPhone: '+8809647-222999',
-  description: 'Corporate and promotional gift item supplier in Bangladesh',
-  address: '500/3 Khilgaon Niribili Society, Dhaka Bangladesh',
-  quickLinksTitle: 'Quick Links',
-  quickLinks: [
-    { label: 'Customer Support', url: '/contact-us' },
-    { label: 'All Products', url: '/products' },
-    { label: 'Categories', url: '/categories' },
-    { label: 'Track My Order', url: '/track-order' },
-  ],
-  socialLinksTitle: 'Follow Us',
-  socialLinks: [
-    { platform: 'facebook', label: 'facebook', url: '' },
-    { platform: 'youtube', label: 'youtube', url: '' },
-    { platform: 'tiktok', label: 'tiktok', url: '' },
-    { platform: 'instagram', label: 'instagram', url: '' },
-  ],
-  importantLinksTitle: 'Important Links',
-  importantLinks: [{ label: 'Refund Policy', url: '/refund-policy' }],
-  paymentMethodsImageUrl: '',
-  copyrightText: 'কাফেলা © 2026.',
-  developerText: 'Develop by SOFT-HEXIS',
-  developerUrl: '',
-  status: true,
-};
+// const DEFAULT_FOOTER = {
+//   logoUrl: '',
+//   companyName: 'Holy Deen',
+//   supportLabel: 'Customer Supports:',
+//   supportPhone: '+8809647-222999',
+//   description: 'Corporate and promotional gift item supplier in Bangladesh',
+//   address: 'House-13, Road-1, Block-D, Mirpur, Dhaka Bangladesh',
+//   quickLinksTitle: 'Quick Links',
+//   quickLinks: [
+//     { label: 'Customer Support', url: '/contact-us' },
+//     { label: 'All Products', url: '/products' },
+//     { label: 'Categories', url: '/categories' },
+//     { label: 'Track My Order', url: '/track-order' },
+//   ],
+//   socialLinksTitle: 'Follow Us',
+//   socialLinks: [
+//     { platform: 'facebook', label: 'facebook', url: '' },
+//     { platform: 'youtube', label: 'youtube', url: '' },
+//     { platform: 'tiktok', label: 'tiktok', url: '' },
+//     { platform: 'instagram', label: 'instagram', url: '' },
+//   ],
+//   importantLinksTitle: 'Important Links',
+//   importantLinks: [{ label: 'Refund Policy', url: '/refund-policy' }],
+//   paymentMethodsImageUrl: '',
+//   copyrightText: 'কাফেলা © 2026.',
+//   developerText: 'Develop by SOFT-HEXIS',
+//   developerUrl: '',
+//   status: true,
+// };
 
 function readImage(file, onLoad) {
   if (!file) return;

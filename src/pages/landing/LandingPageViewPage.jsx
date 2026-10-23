@@ -520,7 +520,16 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
       currency: "BDT",
       num_items: selectedItems.reduce((sum, item) => sum + item.qty, 0),
     };
-    const trackingUser = { name: form.name.trim(), phone: normalizedPhone };
+    const trackingUser = {
+      name: form.name.trim(),
+      phone: normalizedPhone,
+      address: form.address.trim(),
+      district: form.shipping,
+      city: form.shipping === "inside" ? "Dhaka" : "",
+      state: form.shipping === "inside" ? "Dhaka" : "",
+      country: "bd",
+      externalId: incompletePhoneRef.current || normalizedPhone,
+    };
 
     try {
       void trackMarketingEvent("AddPaymentInfo", {
@@ -547,8 +556,6 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
         customData: {
           ...trackingData,
           order_id: placedOrderData.orderId || placedOrderData.Id,
-          value: placedOrderData.purchaseValue ?? Number(placedOrderData.totalBill ?? total),
-          currency: placedOrderData.purchaseCurrency || "BDT",
         },
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -673,7 +680,7 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#fbfaf6] text-slate-900">
+    <div className="flex-1 overflow-y-auto bg-[#fafafa] text-slate-900">
       <div
         className="min-h-screen"
         style={{
@@ -901,11 +908,11 @@ export default function LandingPageViewPage({ campaign, trackingEnabled = true }
                         value={form.coupon}
                         onChange={(event) => set("coupon", event.target.value)}
                         placeholder="Enter coupon code"
-                        className="min-w-0 flex-1 rounded border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-500"
+                        className="min-w-0 flex-1 rounded border border-slate-200 px-3 py-2 text-xs outline-none focus:border-[#0B1B4F]"
                       />
                       <button
                         type="button"
-                        className="rounded bg-emerald-100 px-3 text-xs font-bold text-emerald-700"
+                        className="rounded bg-[#FAF4E6] px-3 text-xs font-bold text-[#A87F18]"
                       >
                         Apply
                       </button>
@@ -1240,13 +1247,13 @@ function RegularLandingTemplate({ data, campaign }) {
   } = data;
   const regularData = parseObject(campaign?.regularData);
   const colors = {
-    titleColor: "#7b2457",
-    subTitleColor: "#111111",
-    headingColor: "#7b2457",
+    titleColor: "#0B1B4F",
+    subTitleColor: "#C59B27",
+    headingColor: "#0B1B4F",
     fontColor: "#333333",
-    buttonColor: "#078f12",
+    buttonColor: "#C59B27",
     buttonTextColor: "#ffffff",
-    sectionBgColor: "#e4f3df",
+    sectionBgColor: "#FAF4E6",
     ...parseObject(regularData.colors),
   };
   const whyChooseTitle = campaign?.whyChooseTitle || "কেন আমাদের থেকেই কিনবেন?";
@@ -1282,7 +1289,7 @@ function RegularLandingTemplate({ data, campaign }) {
     <div className="min-h-screen bg-white text-slate-900">
       <TopStrip phone={phone} onTrack={onTrackOrder} settings={footerSettings?.header} />
 
-      <section className="bg-[#e4f3df] px-4 pb-14 pt-8 text-center">
+      <section className="px-4 pb-14 pt-8 text-center" style={{ backgroundColor: colors.sectionBgColor }}>
         {footerSettings?.header?.status !== false && footerSettings?.header?.logoUrl && (
           <img
             src={footerSettings.header.logoUrl}
@@ -1348,7 +1355,7 @@ function RegularLandingTemplate({ data, campaign }) {
           )}
           {reviewOfferPriceLabel && reviewOfferPrice > 0 && (
             <p className="mt-5 text-3xl font-black md:text-5xl" style={{ color: colors.headingColor }}>
-              {reviewOfferPriceLabel} <span className="text-green-600">{formatMoney(reviewOfferPrice)}/- টাকা</span>
+              {reviewOfferPriceLabel} <span className="text-[#C59B27]">{formatMoney(reviewOfferPrice)}/- টাকা</span>
             </p>
           )}
           {reviewButtonText && (
@@ -1396,7 +1403,7 @@ function RegularLandingTemplate({ data, campaign }) {
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.title || `Feature ${index + 1}`} className="h-36 w-full object-cover" />
                   ) : (
-                    <div className="grid h-36 place-items-center bg-green-50 text-3xl">✅</div>
+                    <div className="grid h-36 place-items-center bg-amber-50 text-3xl">✅</div>
                   )}
                   <p className="px-3 py-4 text-base font-black" style={{ color: colors.headingColor }}>
                     {item.title || `Feature ${index + 1}`}
@@ -1434,7 +1441,7 @@ function RegularLandingTemplate({ data, campaign }) {
       </section>
 
       <section id="order-now" className="bg-slate-100 px-4 py-20">
-        <div className="mx-auto max-w-5xl rounded border-2 border-green-600 bg-white p-6 md:p-8">
+        <div className="mx-auto max-w-5xl rounded border-2 border-[#0B1B4F] bg-white p-6 md:p-8">
           <h2 className="text-center text-3xl font-black text-slate-800">প্রোডাক্ট সিলেক্ট করুন</h2>
           <div className="mt-6">
             <ProductOptionsCheckout
@@ -1462,7 +1469,7 @@ function RegularLandingTemplate({ data, campaign }) {
                     onClick={() => set("shipping", option.id)}
                     className="flex w-full items-center gap-3 border-b border-slate-200 px-4 py-3 text-left text-sm last:border-b-0"
                   >
-                    <span className={`h-5 w-5 rounded-full border ${form.shipping === option.id ? "border-green-600 bg-green-600" : "border-slate-300"}`} />
+                    <span className={`h-5 w-5 rounded-full border ${form.shipping === option.id ? "border-[#0B1B4F] bg-[#0B1B4F]" : "border-slate-300"}`} />
                     {`${option.banglaLabel} ${option.free ? "ফ্রি ডেলিভারি" : `${option.charge} টাকা`}`}
                   </button>
                 ))}
@@ -1472,7 +1479,7 @@ function RegularLandingTemplate({ data, campaign }) {
                 type="button"
                 onClick={onPlaceOrder}
                 disabled={placingOrder}
-                className="mt-6 w-full rounded bg-green-700 px-5 py-4 text-base font-black text-white transition hover:bg-green-800 disabled:opacity-60"
+                className="mt-6 w-full rounded bg-[#0B1B4F] hover:bg-[#071233] px-5 py-4 text-base font-black text-white transition disabled:opacity-60 shadow-md"
               >
                 🔒 {placingOrder ? "অর্ডার হচ্ছে..." : "অর্ডারটি কনফার্ম করুন"}
               </button>
@@ -1580,7 +1587,7 @@ function OrderSuccessPage({
       />
       <main className="mx-auto max-w-3xl px-4 py-10">
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#FAF4E6] text-[#C59B27]">
             <CheckCircle2 size={34} />
           </div>
           <h1 className="mt-4 text-3xl font-black text-slate-900">
@@ -1908,7 +1915,7 @@ function GiveawayCampaignTemplate({ data }) {
   } = data;
 
   return (
-    <div className="min-h-screen bg-[#fffdf8] text-slate-900">
+    <div className="min-h-screen bg-[#ffffff] text-slate-900">
       <div
         className="min-h-screen"
         style={{
@@ -2109,7 +2116,7 @@ function TemplateDesign2({ data }) {
       />
       <main className="mx-auto max-w-[1340px] px-4 pb-14">
         <section className="grid min-h-[520px] items-center gap-8 py-8 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="overflow-hidden rounded border border-emerald-100 bg-white shadow-sm">
+          <div className="overflow-hidden rounded border border-amber-100 bg-white shadow-sm">
             <img
               src={bannerImage}
               alt={productName}
@@ -2117,7 +2124,7 @@ function TemplateDesign2({ data }) {
             />
           </div>
           <div>
-            <span className="inline-flex rounded bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700">
+            <span className="inline-flex rounded bg-[#FAF4E6] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#C59B27]">
               Premium Campaign
             </span>
             <h1 className="mt-4 text-4xl font-black leading-tight text-slate-950 md:text-5xl">
@@ -2463,7 +2470,7 @@ function OrderFormBlock({ data, compact }) {
             <h3 className="text-xs font-bold text-blue-700">
               Campaign Product
             </h3>
-            <div className="mt-3 flex items-center gap-3 rounded border border-emerald-300 bg-white p-3">
+            <div className="mt-3 flex items-center gap-3 rounded border border-[#C59B27]/40 bg-white p-3">
               <img
                 src={bannerImage}
                 alt={productName}
@@ -2475,7 +2482,7 @@ function OrderFormBlock({ data, compact }) {
                 </p>
                 <p className="text-xs text-slate-500">Special campaign offer</p>
               </div>
-              <p className="text-sm font-black text-emerald-700">
+              <p className="text-sm font-black text-[#C59B27]">
                 {formatMoney(price)}
               </p>
             </div>
@@ -2494,11 +2501,11 @@ function OrderFormBlock({ data, compact }) {
                   value={form.coupon}
                   onChange={(event) => set("coupon", event.target.value)}
                   placeholder="Enter coupon code"
-                  className="min-w-0 flex-1 rounded border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-500"
+                  className="min-w-0 flex-1 rounded border border-slate-200 px-3 py-2 text-xs outline-none focus:border-[#0B1B4F]"
                 />
                 <button
                   type="button"
-                  className="rounded bg-emerald-100 px-3 text-xs font-bold text-emerald-700"
+                  className="rounded bg-[#FAF4E6] px-3 text-xs font-bold text-[#A87F18]"
                 >
                   Apply
                 </button>
@@ -2578,7 +2585,7 @@ function TopStrip({ phone, onTrack, settings }) {
   return (
     <div
       style={{
-        backgroundColor: settings?.backgroundColor || "#1d1d1b",
+        backgroundColor: settings?.backgroundColor || "#071233",
         color: settings?.textColor || "#ffffff",
       }}
     >
@@ -2600,19 +2607,19 @@ function TopStrip({ phone, onTrack, settings }) {
             (settings.supportUrl ? (
               <a
                 href={settings.supportUrl}
-                style={{ color: settings?.accentColor || "#fbbf24" }}
+                style={{ color: settings?.accentColor || "#C59B27" }}
               >
                 {settings.supportText}
               </a>
             ) : (
-              <span style={{ color: settings?.accentColor || "#fbbf24" }}>
+              <span style={{ color: settings?.accentColor || "#C59B27" }}>
                 {settings.supportText}
               </span>
             ))}
         </p>
         <div
           className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-2"
-          style={{ color: settings?.accentColor || "#fbbf24" }}
+          style={{ color: settings?.accentColor || "#C59B27" }}
         >
           <button
             type="button"
@@ -2726,7 +2733,7 @@ function JumpButton({ children, targetId, className = "" }) {
           .getElementById(targetId)
           ?.scrollIntoView({ behavior: "smooth", block: "start" })
       }
-      className={`inline-flex items-center gap-2 rounded bg-emerald-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 ${className}`}
+      className={`inline-flex items-center gap-2 rounded bg-[#C59B27] hover:bg-[#A87F18] px-5 py-2.5 text-sm font-black text-white shadow-sm transition ${className}`}
     >
       <ShoppingCart size={14} />
       {children}
@@ -2822,14 +2829,14 @@ function ProductOptionsCheckout({
             <div
               key={option.id}
               className={`flex items-center gap-3 rounded border bg-white p-3 transition ${
-                selected ? "border-emerald-400 ring-1 ring-emerald-100" : "border-slate-200"
+                selected ? "border-[#C59B27] ring-1 ring-[#FAF4E6]" : "border-slate-200"
               }`}
             >
               <button
                 type="button"
                 onClick={() => onToggle(option)}
                 className={`h-4 w-4 flex-shrink-0 rounded-full border ${
-                  selected ? "border-emerald-600 bg-emerald-600" : "border-slate-300"
+                  selected ? "border-[#0B1B4F] bg-[#0B1B4F]" : "border-slate-300"
                 }`}
                 aria-label={`Select ${option.name}`}
               />
@@ -2860,7 +2867,7 @@ function ProductOptionsCheckout({
                       +
                     </button>
                   </div>
-                  <span className="text-xs font-black text-emerald-700">
+                  <span className="text-xs font-black text-[#C59B27]">
                     ৳{formatMoney(option.price)}
                   </span>
                 </div>
@@ -2964,7 +2971,7 @@ function SummaryRow({ label, value, strong, highlight }) {
         {label}
       </span>
       <span
-        className={`${strong ? "font-black" : "font-semibold"} ${highlight ? "text-emerald-700" : "text-slate-800"}`}
+        className={`${strong ? "font-black" : "font-semibold"} ${highlight ? "text-[#C59B27]" : "text-slate-800"}`}
       >
         {value}
       </span>
@@ -2980,7 +2987,7 @@ function ProductCard({ item, image }) {
 
   return (
     <div className="overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm">
-      <div className="relative aspect-[4/3] bg-gradient-to-br from-amber-100 via-white to-emerald-100">
+      <div className="relative aspect-[4/3] bg-gradient-to-br from-amber-100 via-white to-blue-50">
         {image ? (
           <img
             src={image}
@@ -3070,7 +3077,7 @@ function Footer({ phone, settings, pages = [] }) {
     footer.address ||
     contact.address ||
     general.address ||
-    "500/3 Khilgaon Niribili Society, Dhaka Bangladesh";
+    "House-13, Road-1, Block-D, Mirpur, Dhaka Bangladesh";
   const description =
     footer.description ||
     general.footerText ||
@@ -3104,7 +3111,7 @@ function Footer({ phone, settings, pages = [] }) {
   if (hasDynamicFooter && footer.status === false) return null;
 
   return (
-    <footer className="bg-[#20211f] text-slate-300">
+    <footer className="bg-[#071233] text-slate-300">
       <div className="mx-auto  px-4 py-12">
         <div className="grid gap-10 md:grid-cols-[1.65fr_0.75fr_0.75fr_1fr]">
           <div>
@@ -3116,7 +3123,7 @@ function Footer({ phone, settings, pages = [] }) {
                   className="h-12 w-12 rounded-sm bg-white object-contain p-1 shadow-sm"
                 />
               ) : (
-                <span className="flex h-12 w-12 items-center justify-center rounded-sm bg-white text-sm text-amber-500 shadow-sm">
+                <span className="flex h-12 w-12 items-center justify-center rounded-sm bg-white text-sm text-[#C59B27] shadow-sm">
                   {siteName.slice(0, 1)}
                 </span>
               )}
@@ -3178,10 +3185,10 @@ function Footer({ phone, settings, pages = [] }) {
                 <a
                   key={link.label}
                   href={link.href}
-                  className="flex w-full max-w-xs items-center justify-between rounded-lg bg-[#343538] px-4 py-4 text-sm font-black text-slate-400 transition hover:bg-[#3d3e42] hover:text-white"
+                  className="flex w-full max-w-xs items-center justify-between rounded-lg bg-[#0B1B4F] border border-white/10 px-4 py-4 text-sm font-black text-slate-200 transition hover:bg-[#C59B27] hover:text-white"
                 >
                   <span className="inline-flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 text-md font-medium rounded-full bg-slate-400" />
+                    <span className="h-2.5 w-2.5 text-md font-medium rounded-full bg-[#C59B27]" />
                     {link.label}
                   </span>
                   <svg
@@ -3216,12 +3223,12 @@ function Footer({ phone, settings, pages = [] }) {
                   href={footer.developerUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sky-400"
+                  className="text-[#C59B27] hover:underline"
                 >
                   {footer.developerText}
                 </a>
               ) : (
-                <span className="text-sky-400">{footer.developerText}</span>
+                <span className="text-[#C59B27] hover:underline">{footer.developerText}</span>
               )}
             </p>
           </div>

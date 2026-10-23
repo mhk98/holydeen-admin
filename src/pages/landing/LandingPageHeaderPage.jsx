@@ -17,9 +17,9 @@ const DEFAULT_HEADER = {
   ],
   logoUrl: '',
   logoAlt: 'Website logo',
-  backgroundColor: '#1d1d1b',
+  backgroundColor: '#071233',
   textColor: '#ffffff',
-  accentColor: '#fbbf24',
+  accentColor: '#C59B27',
   status: true,
 };
 

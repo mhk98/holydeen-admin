@@ -10,7 +10,7 @@ import {
   Ban, SlidersHorizontal, Share2, Phone, Truck as TruckIcon, CircleDot, FilePlus,
   Bike, Banknote, MessageSquare, ShieldAlert,
   Cpu, Ticket, LayoutGrid, Activity, FileText, Folder, TrendingUp,
-  PanelBottom, PanelTop,
+  PanelBottom, PanelTop, Gift, Repeat,
   X,
 } from 'lucide-react';
 import { orderStatusService, siteSettingService } from '../services/websiteService';
@@ -368,12 +368,12 @@ export default function Sidebar({ activePage, onNavigate, activeOrderStatus, onO
       className={`fixed inset-y-0 left-0 z-40 flex w-56 min-h-screen flex-shrink-0 flex-col overflow-y-auto transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
-      style={{ background: 'linear-gradient(180deg, #121A2E 0%, #1C2744 52%, #2F3D63 100%)' }}
+      style={{ background: 'linear-gradient(180deg, #071233 0%, #0B1B4F 52%, #050E29 100%)' }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 px-4 py-4 border-b border-blue-800/70 flex-shrink-0">
+      <div className="flex items-center gap-2 px-4 py-4 border-b border-white/10 flex-shrink-0">
         {currentLogo && (
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white shadow-sm ring-2 ring-orange-300/80">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white shadow-sm ring-2 ring-[#C59B27]/80">
             <img src={currentLogo} alt={siteName || 'Logo'} className="h-9 w-9 rounded-full object-cover" />
           </div>
         )}
@@ -551,6 +551,14 @@ export default function Sidebar({ activePage, onNavigate, activeOrderStatus, onO
         </ExpandableItem>
         )}
 
+        {/* ── Scratch Card ── */}
+        {hasPermission(permissionSet, 'scratch_card') && (
+          <SidebarItem icon={Gift} label="Scratch Card" active={activePage === 'scratch_card'} onClick={() => onNavigate('scratch_card')} />
+        )}
+        {hasPermission(permissionSet, 'scratch_card_repeat') && (
+          <SidebarItem icon={Repeat} label="Repeat Scratch Card" active={activePage === 'scratch_card_repeat'} onClick={() => onNavigate('scratch_card_repeat')} />
+        )}
+
         {/* ── Website Setting ── */}
         {hasPermission(permissionSet, 'website_setting') && (
         <ExpandableItem
@@ -718,22 +726,22 @@ function ExpandableItem({ icon: Icon, label, isOpen, isActive, badge, onClick, c
       <div
         onClick={onClick}
         className={`flex items-center justify-between px-4 py-2.5 cursor-pointer group transition-all duration-150 ${
-          isActive ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-inner' : 'text-blue-100 hover:bg-white/10 hover:text-white'
+          isActive ? 'bg-gradient-to-r from-[#C59B27] to-[#A87F18] text-white shadow-md font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon size={16} className={isActive ? 'text-orange-200' : 'text-blue-200 group-hover:text-orange-200'} />
+          <Icon size={16} className={isActive ? 'text-white' : 'text-amber-200 group-hover:text-amber-300'} />
           <span className="text-sm font-medium">{label}</span>
         </div>
         <div className="flex items-center gap-1">
           {badge !== undefined && (
-            <span className="bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{badge}</span>
+            <span className="bg-[#C59B27] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{badge}</span>
           )}
           {isOpen ? <ChevronDown size={13} className="opacity-60" /> : <ChevronRight size={13} className="opacity-60" />}
         </div>
       </div>
       {isOpen && (
-        <div className="bg-blue-950/35 border-l-2 border-orange-400 ml-4">
+        <div className="bg-[#050E29]/50 border-l-2 border-[#C59B27] ml-4">
           {children}
         </div>
       )}
@@ -746,7 +754,7 @@ function SubItem({ icon: Icon, label, color, badge, isActive, onClick }) {
     <div
       onClick={onClick}
       className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-all duration-100 ${
-        isActive ? 'bg-blue-600 text-white' : 'text-blue-100 hover:bg-white/10 hover:text-white'
+        isActive ? 'bg-[#C59B27] text-white font-medium' : 'text-blue-100 hover:bg-white/10 hover:text-white'
       }`}
     >
       <div className="flex items-center gap-2">
@@ -767,11 +775,11 @@ function SidebarItem({ icon: Icon, label, active, hasChild, onClick }) {
     <div
       onClick={onClick}
       className={`flex items-center justify-between px-4 py-2.5 cursor-pointer group transition-all duration-150 ${
-        active ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-inner' : 'text-blue-100 hover:bg-white/10 hover:text-white'
+        active ? 'bg-gradient-to-r from-[#C59B27] to-[#A87F18] text-white shadow-md font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'
       }`}
     >
       <div className="flex items-center gap-3">
-        <Icon size={16} className={active ? 'text-orange-200' : 'text-blue-200 group-hover:text-orange-200'} />
+        <Icon size={16} className={active ? 'text-white' : 'text-amber-200 group-hover:text-amber-300'} />
         <span className="text-sm font-medium">{label}</span>
       </div>
       {hasChild && <ChevronRight size={14} className="opacity-60" />}

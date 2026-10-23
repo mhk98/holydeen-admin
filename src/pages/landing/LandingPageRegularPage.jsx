@@ -18,13 +18,13 @@ const DEFAULT_IMAGES = Array.from({ length: 5 }, () => ({
 }));
 
 const DEFAULT_COLORS = {
-  titleColor: '#8a1f5d',
-  subTitleColor: '#000000',
-  headingColor: '#8a1f5d',
-  fontColor: '#111111',
-  buttonColor: '#00a018',
+  titleColor: '#0B1B4F',
+  subTitleColor: '#C59B27',
+  headingColor: '#0B1B4F',
+  fontColor: '#1e293b',
+  buttonColor: '#C59B27',
   buttonTextColor: '#ffffff',
-  sectionBgColor: '#e8f7e4',
+  sectionBgColor: '#FAF4E6',
 };
 
 const DEFAULT_ORDER_FORM = {

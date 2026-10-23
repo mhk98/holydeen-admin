@@ -21,14 +21,22 @@ import {
   useSubcategories,
 } from "../hooks/useProducts";
 import { orderService } from "../services/orderService";
-import { cartLinesFromOrder, sellableUnits, toOrderItem } from "../utils/variants";
+import {
+  cartLinesFromOrder,
+  sellableUnits,
+  toOrderItem,
+} from "../utils/variants";
 import { orderStatusService } from "../services/websiteService";
 import { normalizeOrderStatuses } from "../utils/orderStatuses";
 import { imageUrl } from "../utils/assetUrl";
 
 const deliveryAreas = [
   { label: "ঢাকার ভিতরে ৮০ টাকা", fee: 80 },
-  { label: "ঢাকার বাইরে ১৩০ টাকা", fee: 130, legacyLabels: ["ঢাকার বাইরে ১২০ টাকা"] },
+  {
+    label: "ঢাকার বাইরে ১৩০ টাকা",
+    fee: 130,
+    legacyLabels: ["ঢাকার বাইরে ১২০ টাকা"],
+  },
   { label: "চট্টগ্রাম ১৫০ টাকা", fee: 150 },
   { label: "সিলেট ১৫০ টাকা", fee: 150 },
   { label: "রাজশাহী ১৩০ টাকা", fee: 130 },
@@ -143,7 +151,9 @@ export default function EditOrderPage({
   const [shippingFee, setShippingFee] = useState(() =>
     initialOrder.legacy ? 0 : initialOrder.deliveryCharge,
   );
-  const [discount, setDiscount] = useState(initialOrder.discount ? String(initialOrder.discount) : "");
+  const [discount, setDiscount] = useState(
+    initialOrder.discount ? String(initialOrder.discount) : "",
+  );
   const [advanced, setAdvanced] = useState(String(order.advance || 0));
   const [orderStatus, setOrderStatus] = useState(order.status || "pending");
   const [isGuest, setIsGuest] = useState(false);

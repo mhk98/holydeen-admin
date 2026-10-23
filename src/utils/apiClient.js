@@ -116,13 +116,18 @@ function isNetworkError(error) {
   );
 }
 
+const NETWORK_ERROR_MESSAGE =
+  "Cannot reach the server. Make sure the backend is running and try again.";
+
 async function fetchWithRetry(url, init, retryNetworkErrors) {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await fetch(url, init);
     } catch (error) {
       const delay = NETWORK_RETRY_DELAYS[attempt];
-      if (!retryNetworkErrors || !delay || !isNetworkError(error)) throw error;
+      if (!isNetworkError(error)) throw error;
+      // The browser's raw "Failed to fetch" doesn't tell the admin what went wrong.
+      if (!retryNetworkErrors || !delay) throw new Error(NETWORK_ERROR_MESSAGE, { cause: error });
       await wait(delay);
     }
   }

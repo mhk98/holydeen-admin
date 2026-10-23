@@ -50,7 +50,7 @@ export default function BrandsPage({ onNavigate, onEditBrand }) {
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-x-auto">
-        <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'linear-gradient(90deg, #1d4ed8, #3b82f6)' }}>
+        <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'linear-gradient(90deg, #111111, #3F3F3F)' }}>
           <span className="text-white font-semibold text-sm">All Brands ({meta?.count ?? brands.length})</span>
           <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="text-xs px-3 py-1.5 rounded-lg border-0 focus:outline-none w-36" />
         </div>

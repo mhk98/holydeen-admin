@@ -51,7 +51,7 @@ export default function SubcategoriesPage({ onNavigate, onEditSubcategory }) {
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-x-auto">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between" style={{ background: 'linear-gradient(90deg, #1d4ed8, #3b82f6)' }}>
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between" style={{ background: 'linear-gradient(90deg, #111111, #3F3F3F)' }}>
           <span className="text-white font-semibold text-sm">All Subcategories ({meta?.count ?? subcategories.length})</span>
           <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="text-xs px-3 py-1.5 rounded-lg border-0 focus:outline-none w-36" />
         </div>
