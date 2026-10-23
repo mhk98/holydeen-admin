@@ -164,6 +164,7 @@ function getClickData() {
   if (wbraid) setStorage("wbraid", wbraid);
 
   return {
+    deviceId: getTrackingDeviceId() || undefined,
     fbp: getOrInitFbp(),
     fbc: getOrInitFbc(),
     ttp: getCookie("_ttp") || getStorage("_ttp") || undefined,
@@ -172,6 +173,92 @@ function getClickData() {
     gbraid: gbraid || getStorage("gbraid") || undefined,
     wbraid: wbraid || getStorage("wbraid") || undefined,
   };
+}
+
+// Same key the landing page order form uses, so external_id stays stable per browser.
+const DEVICE_ID_KEY = "holydeen_device_id";
+const TRACKING_USER_KEY = "holydeen_tracking_user";
+const REMEMBERED_FIELDS = ["name", "firstName", "lastName", "phone", "email", "address", "district", "city", "zip", "customerId"];
+
+function getTrackingDeviceId() {
+  if (typeof window === "undefined") return "";
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const generated = globalThis.crypto?.randomUUID
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+    localStorage.setItem(DEVICE_ID_KEY, generated);
+    return generated;
+  } catch {
+    return "";
+  }
+}
+
+function getKnownUserData() {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(TRACKING_USER_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+// Details typed into the order form are reused on later PageView/ViewContent events.
+function rememberUserData(userData = {}) {
+  if (typeof window === "undefined" || !userData.phone) return;
+  const known = getKnownUserData();
+  REMEMBERED_FIELDS.forEach((field) => {
+    const value = userData[field];
+    if (value !== undefined && value !== null && value !== "") known[field] = value;
+  });
+  try {
+    localStorage.setItem(TRACKING_USER_KEY, JSON.stringify(known));
+  } catch {
+    // Storage blocked (private mode); matching falls back to this event's own data.
+  }
+}
+
+function toInternationalPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "").replace(/^00/, "");
+  if (/^8801\d{9}$/.test(digits)) return digits;
+  if (/^01\d{9}$/.test(digits)) return `88${digits}`;
+  if (/^1\d{9}$/.test(digits)) return `880${digits}`;
+  return "";
+}
+
+const cleanGeo = (value) => String(value || "").toLowerCase().replace(/[^a-z]/g, "");
+
+// Manual advanced matching payload; the pixel normalises and hashes these itself.
+function buildAdvancedMatching(userData = {}) {
+  const parts = String(userData.name || "").trim().replace(/[^\p{L}\p{N}\s]/gu, "").split(/\s+/).filter(Boolean);
+  const district = String(userData.district || "").toLowerCase();
+  const city = cleanGeo(userData.city || (district === "inside" ? "dhaka" : district === "outside" ? "" : district));
+  const email = String(userData.email || "").trim().toLowerCase();
+  const matching = {
+    ph: toInternationalPhone(userData.phone),
+    em: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "",
+    fn: String(userData.firstName || parts[0] || "").toLowerCase(),
+    ln: String(userData.lastName || parts.slice(1).join(" ") || "").toLowerCase(),
+    ct: city,
+    st: city === "dhaka" ? "dhaka" : "",
+    zp: /^\d{4}$/.test(String(userData.zip || "")) ? String(userData.zip) : "",
+    country: "bd",
+    external_id: getTrackingDeviceId(),
+  };
+  return Object.fromEntries(Object.entries(matching).filter(([, value]) => value));
+}
+
+let lastMatchingKey = "";
+
+// Re-running init with the same pixel id is how Meta updates advanced matching after load.
+function applyAdvancedMatching() {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+  const matching = buildAdvancedMatching(getKnownUserData());
+  const key = JSON.stringify(matching);
+  if (key === lastMatchingKey) return;
+  lastMatchingKey = key;
+  trackingConfig.metaPixels.forEach((pixel) => window.fbq("init", pixel.pixelsId, matching));
 }
 
 function installMetaPixel() {
@@ -279,9 +366,7 @@ export async function initializeTracking() {
 
       if (trackingConfig.metaPixels.length) {
         installMetaPixel();
-        trackingConfig.metaPixels.forEach((pixel) =>
-          window.fbq("init", pixel.pixelsId),
-        );
+        applyAdvancedMatching();
       }
       if (trackingConfig.tiktokPixels.length) {
         installTiktokPixel();
@@ -359,10 +444,13 @@ export async function trackMarketingEvent(
     await initializeTracking();
     if (!enabled || trackingSuspended) return null;
     const eventId = suppliedEventId || createEventId(eventName);
+    rememberUserData(userData);
+    applyAdvancedMatching();
     trackInBrowser(eventName, eventId, customData);
     if (!server) return eventId;
     const clickData = getClickData();
     const payloadUserData = {
+      ...getKnownUserData(),
       ...clickData,
       ...userData,
       country: userData.country || "bd",
