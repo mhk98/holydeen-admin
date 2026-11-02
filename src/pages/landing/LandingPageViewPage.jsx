@@ -1548,6 +1548,7 @@ function RegularOrderInput({ icon, placeholder, value, onChange }) {
         placeholder={placeholder}
         className="min-w-0 flex-1 px-3 py-3 text-sm outline-none"
       />
+      <span className="pr-3 text-base font-bold text-red-600">*</span>
     </label>
   );
 }
@@ -2795,7 +2796,7 @@ function Input({ label, value, onChange, placeholder, type = "text" }) {
   return (
     <label className="block text-left">
       <span className="mb-1 block text-xs font-bold text-slate-600">
-        {label}
+        {label.replace(/\s*\*\s*$/, "")} <span className="text-red-600">*</span>
       </span>
       <input
         type={type}

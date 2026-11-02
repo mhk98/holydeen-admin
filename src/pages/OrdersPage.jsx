@@ -34,6 +34,7 @@ import {
   toOrderStatusKey,
 } from "../utils/orderStatuses";
 import { imageUrl } from "../utils/assetUrl";
+import CourierStickerSheet from "../components/CourierStickerSheet";
 import {
   getLogo,
   getSiteName,
@@ -169,6 +170,7 @@ export default function OrdersPage({
   const [bulkCourierBusy, setBulkCourierBusy] = useState(false);
   const [barcodePrintOrders, setBarcodePrintOrders] = useState([]);
   const [invoicePrintOrders, setInvoicePrintOrders] = useState([]);
+  const [courierStickers, setCourierStickers] = useState([]);
   const [assignees, setAssignees] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
@@ -275,6 +277,19 @@ export default function OrdersPage({
       window.removeEventListener("afterprint", handleAfterPrint);
     };
   }, [invoicePrintOrders.length]);
+
+  useEffect(() => {
+    if (!courierStickers.length) return undefined;
+
+    const handleAfterPrint = () => setCourierStickers([]);
+    window.addEventListener("afterprint", handleAfterPrint);
+    const timer = window.setTimeout(() => window.print(), 100);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, [courierStickers]);
 
   function handleSearch() {
     setAppliedSearch(search);
@@ -572,6 +587,35 @@ export default function OrdersPage({
     }
 
     setInvoicePrintOrders(selectedOrders);
+  }
+
+  function handlePrintSelectedStickers() {
+    const selectedOrders = selectedOrderIds
+      .map((id) => orders.find((order) => Number(order.Id) === Number(id)))
+      .filter(Boolean);
+
+    if (!selectedOrders.length) {
+      alert("Sticker print করার জন্য আগে order select করুন");
+      return;
+    }
+
+    const stickers = selectedOrders.map(buildCourierSticker).filter(Boolean);
+    if (!stickers.length) {
+      alert(
+        "Selected orders এর কোনোটি এখনো Pathao বা Steadfast এ পাঠানো হয়নি",
+      );
+      return;
+    }
+    const skipped = selectedOrders.length - stickers.length;
+    if (
+      skipped > 0 &&
+      !window.confirm(
+        `${skipped} টি order courier এ পাঠানো হয়নি, সেগুলো বাদ যাবে। বাকি ${stickers.length} টি sticker print করবেন?`,
+      )
+    )
+      return;
+
+    setCourierStickers(stickers);
   }
 
   async function handleAssignSelectedOrders() {
@@ -1047,6 +1091,14 @@ export default function OrdersPage({
               <Printer size={14} />
               Print Invoice
             </button>
+            <button
+              type="button"
+              onClick={handlePrintSelectedStickers}
+              className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-600"
+            >
+              <Truck size={14} />
+              Print Sticker
+            </button>
           </div>
           {canAssignOrders && (
             <div className="border-t border-gray-100 px-4 pb-4 pt-3">
@@ -1133,8 +1185,63 @@ export default function OrdersPage({
           siteSettings={siteSettings}
         />
       )}
+
+      {courierStickers.length > 0 && (
+        <CourierStickerSheet
+          stickers={courierStickers}
+          merchant={getStickerMerchant(siteSettings)}
+        />
+      )}
     </div>
   );
+}
+
+function getStickerMerchant(siteSettings) {
+  const settings = normalizeSettingData(siteSettings);
+  return {
+    name: getSiteName(settings) || settings.companyName || "Holy Deen",
+    phone: settings.phone || settings.phoneNumber || "",
+  };
+}
+
+// Sticker data for an order already handed to a courier; null when it was never sent.
+function buildCourierSticker(order) {
+  const pathaoInfo = getPathaoInfo(order);
+  const steadfastInfo = getSteadfastInfo(order);
+  const pathaoId = pathaoInfo.consignmentId || pathaoInfo.trackingCode;
+  const steadfastId = steadfastInfo.consignmentId || steadfastInfo.trackingCode;
+  const prefersSteadfast = /steadfast/i.test(order.courier || "");
+  const courier =
+    steadfastId && (prefersSteadfast || !pathaoId)
+      ? "steadfast"
+      : pathaoId
+        ? "pathao"
+        : null;
+  if (!courier) return null;
+
+  const info = courier === "pathao" ? pathaoInfo : steadfastInfo;
+  // The amount the courier was told to collect; fall back to the order's due.
+  const sentCod =
+    info.lastPayload?.amount_to_collect ?? info.lastPayload?.cod_amount;
+  const orderDate = order.orderDate || order.createdAt;
+
+  return {
+    id: order.Id,
+    courier,
+    consignmentId: String(courier === "pathao" ? pathaoId : steadfastId),
+    trackingCode: info.trackingCode ? String(info.trackingCode) : "",
+    customerName: order.customerName || "Customer",
+    customerPhone: order.customerPhone || "",
+    address: getCustomerAddressItems(order)
+      .map((item) => item.value)
+      .join(", "),
+    codAmount:
+      sentCod != null && sentCod !== ""
+        ? Number(sentCod)
+        : getOrderAmountSummary(order).due,
+    invoice: formatInvoiceNumber(order, String(order.orderId || order.Id)),
+    date: orderDate ? new Date(orderDate).toLocaleDateString("en-GB") : "",
+  };
 }
 
 function parseOrderNote(note) {
