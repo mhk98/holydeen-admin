@@ -103,7 +103,16 @@ async function doRefresh() {
 // Singleton refresh promise to prevent parallel refresh calls
 let refreshPromise = null;
 
-const NETWORK_RETRY_DELAYS = [400, 1200];
+// Long enough to cover the backend process booting before its port opens.
+const NETWORK_RETRY_DELAYS = [400, 1200, 3000, 5000, 5000, 10000, 10000, 15000, 15000];
+const SERVER_STARTING_RETRY_MS = 5000;
+const SERVER_STARTING_MAX_WAIT_MS = 3 * 60 * 1000;
+
+async function isServerStarting(res) {
+  if (res.status !== 503) return false;
+  const body = await res.clone().json().catch(() => null);
+  return body?.code === "SERVER_STARTING";
+}
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -120,9 +129,21 @@ const NETWORK_ERROR_MESSAGE =
   "Cannot reach the server. Make sure the backend is running and try again.";
 
 async function fetchWithRetry(url, init, retryNetworkErrors) {
+  const startedAt = Date.now();
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await fetch(url, init);
+      const res = await fetch(url, init);
+      // Wait out the backend's startup instead of showing an error for it.
+      if (
+        retryNetworkErrors &&
+        Date.now() - startedAt < SERVER_STARTING_MAX_WAIT_MS &&
+        (await isServerStarting(res))
+      ) {
+        await wait(SERVER_STARTING_RETRY_MS);
+        attempt -= 1; // Not a network failure; keep those retries available.
+        continue;
+      }
+      return res;
     } catch (error) {
       const delay = NETWORK_RETRY_DELAYS[attempt];
       if (!isNetworkError(error)) throw error;

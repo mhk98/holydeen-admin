@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { categoryService } from '../../services/productService';
-import { imageUrl } from '../../utils/assetUrl';
+import CategoryImageField from './CategoryImageField';
+import CategoryAddonFields from './CategoryAddonFields';
 
 function Toggle({ checked, onChange }) {
   return (
@@ -22,28 +23,18 @@ export default function CategoryEditPage({ category, onNavigate }) {
   const [frontView, setFrontView] = useState(Boolean(category?.isActive ?? category?.frontView));
   const [imageFile, setImageFile] = useState(category?.imageFile || category?.image || '');
   const [bannerFile, setBannerFile] = useState(category?.bannerImage || '');
-  const [imageName, setImageName] = useState('No file chosen');
-  const [bannerName, setBannerName] = useState('No file chosen');
+  const [bannerTitle, setBannerTitle] = useState(category?.bannerTitle || '');
+  const [addonProductId, setAddonProductId] = useState(category?.addonProductId ?? '');
+  const [addonPrice, setAddonPrice] = useState(category?.addonPrice ?? '');
   const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? '');
   const [metaTitle, setMetaTitle] = useState(category?.metaTitle || '');
   const [metaDescription, setMetaDescription] = useState(category?.metaDescription || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  function readFile(file, setter, nameSetter) {
-    if (!file) {
-      setter('');
-      nameSetter('No file chosen');
-      return;
-    }
-    nameSetter(file.name);
-    const reader = new FileReader();
-    reader.onload = () => setter(reader.result || '');
-    reader.readAsDataURL(file);
-  }
-
   async function handleSubmit() {
     if (!name.trim()) { setError('Name is required.'); return; }
+    if (addonProductId && addonPrice === '') { setError('Add-on price is required.'); return; }
     setError('');
     setSaving(true);
     try {
@@ -55,6 +46,9 @@ export default function CategoryEditPage({ category, onNavigate }) {
         imageFile: imageFile || null,
         image: imageFile || null,
         bannerImage: bannerFile || null,
+        bannerTitle: bannerTitle.trim() || null,
+        addonProductId: addonProductId ? Number(addonProductId) : null,
+        addonPrice: addonProductId ? Number(addonPrice) : null,
         sortOrder: sortOrder === '' ? null : Number(sortOrder),
         metaTitle,
         metaDescription,
@@ -100,36 +94,33 @@ export default function CategoryEditPage({ category, onNavigate }) {
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
-          <label className="flex items-center border border-gray-300 rounded overflow-hidden cursor-pointer w-full">
-            <span className="bg-white border-r border-gray-300 px-3 py-2 text-xs text-gray-600 whitespace-nowrap hover:bg-gray-50 transition">
-              Choose file
-            </span>
-            <span className="px-3 text-xs text-gray-400 flex-1">{imageName}</span>
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => readFile(e.target.files[0], setImageFile, setImageName)} />
-          </label>
-          {imageFile && (
-            <img src={imageUrl(imageFile)} alt={category.name} className="w-16 h-16 rounded-lg object-cover mt-2 border border-gray-200" />
-          )}
-        </div>
+        <CategoryImageField
+          label="Image"
+          recommended="600 × 330 px"
+          value={imageFile}
+          onChange={setImageFile}
+          previewClassName="h-16 w-16"
+        />
+
+        <CategoryImageField
+          label="Banner Image"
+          recommended="1920 × 1080 px"
+          value={bannerFile}
+          onChange={setBannerFile}
+          previewClassName="h-20 w-40"
+        />
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Banner Image</label>
-          <label className="flex items-center border border-gray-300 rounded overflow-hidden cursor-pointer w-full">
-            <span className="bg-white border-r border-gray-300 px-3 py-2 text-xs text-gray-600 whitespace-nowrap hover:bg-gray-50 transition">
-              Choose file
-            </span>
-            <span className="px-3 text-xs text-gray-400 flex-1">{bannerName}</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => readFile(e.target.files[0], setBannerFile, setBannerName)}
-            />
-          </label>
-          {bannerFile && <img src={imageUrl(bannerFile)} alt="category banner" className="mt-2 h-20 w-40 rounded-lg border border-gray-200 object-cover" />}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Banner Title</label>
+          <input type="text" maxLength={255} value={bannerTitle} onChange={(e) => setBannerTitle(e.target.value)} className={inputCls} />
         </div>
+
+        <CategoryAddonFields
+          productId={addonProductId}
+          price={addonPrice}
+          onProductChange={setAddonProductId}
+          onPriceChange={setAddonPrice}
+        />
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>

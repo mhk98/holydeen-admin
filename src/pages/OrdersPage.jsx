@@ -1345,6 +1345,7 @@ function OrderBarcodeLabel({ order }) {
         </p>
         <p className="order-barcode-label__text">{order.customerPhone || ""}</p>
         <p className="order-barcode-label__text">{address}</p>
+        <p className="order-barcode-label__text">{order.productName || ""}</p>
       </div>
     </div>
   );
