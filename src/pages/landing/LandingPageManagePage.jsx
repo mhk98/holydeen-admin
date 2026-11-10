@@ -16,8 +16,9 @@ const FRONTEND_SITE_URL = (
   import.meta.env.VITE_SITE_URL || "https://holydeen.com"
 ).replace(/\/+$/, "");
 
-function getFrontendLandingUrl(id) {
-  return `${FRONTEND_SITE_URL}/landing-page/${encodeURIComponent(String(id))}`;
+// Landing pages live at the site root, under a slug made from the campaign title.
+function getFrontendLandingUrl(campaign) {
+  return `${FRONTEND_SITE_URL}/${encodeURIComponent(String(campaign.slug || campaign.Id))}`;
 }
 
 export default function LandingPageManagePage({
@@ -252,7 +253,7 @@ export default function LandingPageManagePage({
                     onToggleStatus={() => toggleStatus(c.Id)}
                     onView={() => onViewCampaign && onViewCampaign(c)}
                     onEdit={() => onEditCampaign && onEditCampaign(c)}
-                    frontendUrl={getFrontendLandingUrl(c.Id)}
+                    frontendUrl={getFrontendLandingUrl(c)}
                   />
                 ))}
               {!loading && paged.length === 0 && (
