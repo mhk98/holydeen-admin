@@ -45,6 +45,11 @@ const DEFAULT_ORDER_FORM = {
   requiredError: 'আপনার নাম, সঠিক ফোন নম্বর এবং ঠিকানা দিন।',
   productRequiredError: 'অর্ডারের জন্য অন্তত একটি প্রোডাক্ট সিলেক্ট করুন।',
   successMessage: 'আপনার অর্ডারটি নেওয়া হয়েছে।',
+  // Add-on offer card (product and price come from the product's category).
+  addonEnabled: true,
+  addonTitle: '🎁 বিশেষ অফার',
+  addonCheckboxText: 'হ্যাঁ, আমি {product} নিতে চাই',
+  addonNoteText: 'প্রতিটি {product}-এর সাথে ১টি',
 };
 
 function RichTextEditor({ value, onChange, placeholder = 'Enter Your Text Here' }) {
@@ -889,6 +894,49 @@ export default function LandingPageRegularPage({ mode = 'create', campaign, onNa
               <TextInput label="Product Required Error" value={form.orderForm.productRequiredError} onChange={(value) => setOrderForm('productRequiredError', value)} />
               <TextInput label="Success Message" value={form.orderForm.successMessage} onChange={(value) => setOrderForm('successMessage', value)} />
             </div>
+          </section>
+
+          <section className="rounded-lg border border-dashed border-amber-400 bg-amber-50/40 p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-gray-700">Add-on অফার (যেমন: হুডি)</h2>
+                <p className="mt-1 max-w-2xl text-xs text-gray-500">
+                  এই page-এর product যে category-তে আছে, সেই category-তে Add-on Product সেট করা থাকলে
+                  order form-এ অফার কার্ডটি দেখাবে। কোন product আর কত দাম, তা ঠিক হয়
+                  Products → Categories → Edit থেকে; এখানে শুধু অফারটি চালু/বন্ধ আর কার্ডের লেখা।
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-700">
+                  {form.orderForm.addonEnabled !== false ? 'চালু' : 'বন্ধ'}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Add-on অফার চালু/বন্ধ"
+                  onClick={() => setOrderForm('addonEnabled', form.orderForm.addonEnabled === false)}
+                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition ${form.orderForm.addonEnabled !== false ? 'bg-green-500' : 'bg-gray-300'}`}
+                >
+                  <span className={`h-5 w-5 rounded-full bg-white shadow transition ${form.orderForm.addonEnabled !== false ? 'translate-x-8' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            </div>
+            {form.orderForm.addonEnabled !== false ? (
+              <>
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                  <TextInput label="কার্ডের শিরোনাম" value={form.orderForm.addonTitle} onChange={(value) => setOrderForm('addonTitle', value)} />
+                  <TextInput label="Checkbox-এর লেখা" value={form.orderForm.addonCheckboxText} onChange={(value) => setOrderForm('addonCheckboxText', value)} />
+                  <TextInput label="নিচের ছোট লেখা" value={form.orderForm.addonNoteText} onChange={(value) => setOrderForm('addonNoteText', value)} />
+                </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  {'{product}'} লিখলে Checkbox-এ add-on product-এর নাম (যেমন Hoodie) আর নিচের লেখায়
+                  এই page-এর product-এর নাম বসবে। কোনো ঘর খালি রাখলে ডিফল্ট লেখা দেখাবে।
+                </p>
+              </>
+            ) : (
+              <p className="text-xs font-semibold text-gray-600">
+                বন্ধ: এই landing page-এ অফার কার্ড দেখাবে না, আর এই page-এর order-এ add-on যোগ হবে না।
+              </p>
+            )}
           </section>
 
           <div>
